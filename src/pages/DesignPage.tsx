@@ -549,10 +549,10 @@ function ProjectPreview({ scenario }: { scenario: ScenarioConfig }) {
 }
 
 function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase; currentStep: number; scenario: ScenarioConfig }) {
-  const [open, setOpen] = useState(phase === 'planning' || phase === 'building');
+  const [open, setOpen] = useState(phase === 'thinking' || phase === 'planning' || phase === 'building');
 
   useEffect(() => {
-    if (phase === 'planning' || phase === 'building') setOpen(true);
+    if (phase === 'thinking' || phase === 'planning' || phase === 'building') setOpen(true);
     if (phase === 'ready') setOpen(false);
   }, [phase]);
 
@@ -571,11 +571,13 @@ function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase
           ? scenario.steps[currentStep]?.name ?? '正在执行计划'
           : `${scenario.title} 已完成`;
 
-  const getState = (index: number) => {
-    if (phase === 'ready' || (phase === 'building' && index < currentStep)) return 'done';
-    if (phase === 'building' && index === currentStep) return 'active';
-    return 'pending';
-  };
+  const recentStepIndex = phase === 'ready'
+    ? scenario.steps.length - 1
+    : phase === 'building'
+      ? Math.min(Math.max(currentStep, 0), scenario.steps.length - 1)
+      : -1;
+  const recentStep = recentStepIndex >= 0 ? scenario.steps[recentStepIndex] : undefined;
+  const recentStepDone = phase === 'ready';
 
   return (
     <div data-testid="execution-plan-dock" className="mx-3 rounded-xl border border-bolt-light-5 bg-white shadow-sm overflow-hidden">
@@ -598,23 +600,29 @@ function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase
       </button>
 
       {open && (
-        <div data-testid="execution-plan-dock-content" className="border-t border-bolt-light-5 px-3 py-2 max-h-48 overflow-y-auto animate-fade-in">
-          {scenario.steps.map((step, index) => {
-            const state = getState(index);
-            return (
-              <div key={step.name} className={`flex items-center gap-2 rounded-lg px-2 py-2 ${state === 'active' ? 'bg-bolt-blue-light' : ''}`}>
-                {state === 'done' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-bolt-green" />
-                ) : state === 'active' ? (
-                  <Loader2 className="w-4 h-4 shrink-0 text-bolt-blue animate-spin" />
-                ) : (
-                  <Circle className="w-4 h-4 shrink-0 text-bolt-light-5" />
+        <div data-testid="execution-plan-dock-content" className="border-t border-bolt-light-5 px-3 py-2 animate-fade-in">
+          <div data-testid="execution-plan-recent-step" className={`flex items-start gap-2 rounded-lg px-2 py-2.5 ${recentStepDone ? '' : 'bg-bolt-blue-light'}`}>
+            {recentStepDone ? (
+              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-bolt-green" />
+            ) : (
+              <Loader2 className="w-4 h-4 mt-0.5 shrink-0 text-bolt-blue animate-spin" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className={`min-w-0 flex-1 truncate text-[11.5px] font-medium ${recentStepDone ? 'text-bolt-light-9' : 'text-bolt-blue'}`}>
+                  {recentStep?.name ?? currentLabel}
+                </span>
+                {recentStep && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${recentStep.type === 'MCP' ? 'bg-bolt-blue-light text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
+                    {recentStep.type}
+                  </span>
                 )}
-                <span className={`min-w-0 flex-1 truncate text-[11.5px] ${state === 'active' ? 'font-medium text-bolt-blue' : 'text-bolt-light-9'}`}>{step.name}</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded ${step.type === 'MCP' ? 'bg-bolt-blue-light text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>{step.type}</span>
               </div>
-            );
-          })}
+              <p className="mt-1 text-[10.5px] leading-relaxed text-bolt-light-7">
+                {recentStep?.detail ?? (phase === 'thinking' ? '正在识别项目类型，并匹配所需的盈米 MCP 与 Skills。' : '正在整理执行步骤与能力调用顺序。')}
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -920,7 +928,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           <div ref={messagesEndRef} />
         </div>
 
-        {layoutMode === 'focus' && (phase === 'planning' || phase === 'building' || phase === 'ready') && (
+        {layoutMode === 'focus' && (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') && (
           <ExecutionPlanDock phase={phase} currentStep={currentStep} scenario={scenario} />
         )}
 

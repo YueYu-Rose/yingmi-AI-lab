@@ -126,4 +126,15 @@
 - console errors checked: 是；0 条 console error，0 条 page error。
 - findings: 收起状态保留“个人空间 + 项目数 + 放大镜”；展开状态保留“个人空间 + 搜索框”，项目数消失；筛选结果正确。底部蓝色“新建项目”按钮已删除。没有 P0 / P1 / P2 问题。
 
-final result: passed
+## Execution Plan Dock Latest-step Update
+
+- source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-a595c218-08b4-436f-b7f5-a4e7f8bbcc46.png`
+- implementation screenshot path: unavailable in this Codex session
+- intended states: thinking/planning/building 自动展开；展开区仅显示最新状态或当前步骤；ready 自动收起；ready 状态允许用户手动重新打开并显示最后一步。
+- implementation evidence: `ExecutionPlanDock` 现已在 `thinking` 阶段渲染；`thinking`、`planning`、`building` 阶段强制打开；`ready` 阶段自动关闭；展开内容从全步骤循环改为单个 `execution-plan-recent-step`。
+- build validation: `npm run build` passed on 2026-08-06.
+- browser-rendered evidence: blocked，因为当前会话没有可调用的 in-app Browser/Playwright 工具，无法自动点击并捕获四个交互状态。
+- console errors checked: blocked for the same reason.
+- remaining verification: 在当前本地页面依次确认思考中展开、执行时最新步骤替换、完成后收起、完成后手动重开。
+
+final result: blocked
