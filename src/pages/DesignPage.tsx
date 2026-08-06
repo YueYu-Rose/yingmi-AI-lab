@@ -648,6 +648,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [previewExpired, setPreviewExpired] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -687,6 +688,27 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     textareaRef.current.style.height = 'auto';
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
   }, [input]);
+
+  useEffect(() => {
+    if (phase !== 'ready') {
+      setPreviewExpired(false);
+      return;
+    }
+
+    let inactivityTimer = window.setTimeout(() => setPreviewExpired(true), 30 * 60 * 1000);
+    const resetInactivityTimer = () => {
+      window.clearTimeout(inactivityTimer);
+      inactivityTimer = window.setTimeout(() => setPreviewExpired(true), 30 * 60 * 1000);
+    };
+
+    window.addEventListener('pointerdown', resetInactivityTimer);
+    window.addEventListener('keydown', resetInactivityTimer);
+    return () => {
+      window.clearTimeout(inactivityTimer);
+      window.removeEventListener('pointerdown', resetInactivityTimer);
+      window.removeEventListener('keydown', resetInactivityTimer);
+    };
+  }, [phase]);
 
   const sendMessage = () => {
     if (!input.trim() || isRefining || (phase !== 'waiting' && phase !== 'ready')) return;
@@ -1008,7 +1030,22 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
         <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
           {viewMode === 'preview' ? (
             <div className="bg-white rounded-lg shadow-md border border-bolt-light-5 overflow-hidden transition-all duration-300" style={{ width: deviceWidths[deviceMode], maxWidth: '100%', height: '100%' }}>
-              {phase === 'waiting' ? (
+              {phase === 'ready' && previewExpired ? (
+                <div data-testid="preview-expired" className="h-full flex flex-col items-center justify-center bg-white p-8 text-center">
+                  <img src="/resume-loading-mark.png" alt="" aria-hidden="true" className="w-[54px] h-7 object-contain mb-7" />
+                  <h2 className="text-[22px] font-bold tracking-tight text-bolt-light-12">预览暂时休眠</h2>
+                  <p className="mt-3 max-w-md text-[14px] leading-relaxed text-bolt-light-7">
+                    为了节省资源，长时间未操作的项目已暂停预览。唤醒后可从当前位置继续查看和编辑。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewExpired(false)}
+                    className="mt-7 rounded-xl bg-bolt-light-12 px-7 py-3 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-blue focus-visible:ring-offset-2"
+                  >
+                    唤醒预览
+                  </button>
+                </div>
+              ) : phase === 'waiting' ? (
                 <div data-testid="empty-preview" className="h-full flex flex-col items-center justify-center bolt-grid-bg p-8 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-bolt-light-4 flex items-center justify-center mb-4">
                     <Monitor className="w-8 h-8 text-bolt-light-7" />

@@ -137,4 +137,13 @@
 - console errors checked: blocked for the same reason.
 - remaining verification: 在当前本地页面依次确认思考中展开、执行时最新步骤替换、完成后收起、完成后手动重开。
 
+## Preview Sleep State
+
+- source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-d407c197-dc3e-4576-bd04-5835bf194b15.png`
+- implementation screenshot path: unavailable in this Codex session
+- intended state: 项目进入 ready 后 30 分钟无操作，右侧预览暂停并显示可恢复的品牌化提示；点击“唤醒预览”后原地恢复，不刷新整个应用。
+- copy: “预览暂时休眠” / “为了节省资源，长时间未操作的项目已暂停预览。唤醒后可从当前位置继续查看和编辑。” / “唤醒预览”。文案为盈米实验室重新创作，没有照抄参考图。
+- build validation: `npm run build` passed on 2026-08-06.
+- browser-rendered evidence and console check: blocked，因为当前会话没有可调用的 in-app Browser/Playwright 工具。
+
 final result: blocked

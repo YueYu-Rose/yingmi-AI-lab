@@ -13,8 +13,8 @@ interface ProjectGridProps {
 
 function getViewConfig(view: SidebarView): { title: string; subtitle: string; icon: typeof FolderKanban } {
   switch (view) {
-    case 'projects':
-      return { title: '项目', subtitle: '所有项目集中管理', icon: FolderKanban };
+    case 'workspace':
+      return { title: '工作空间', subtitle: '集中管理你创建的所有项目', icon: FolderKanban };
     case 'starred':
       return { title: '已加星标', subtitle: '你收藏的项目', icon: Star };
     case 'recent':

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import FrontPage from '@/pages/FrontPage';
 import DesignPage from '@/pages/DesignPage';
-import type { Page, Project } from '@/types';
+import type { Page, Project, SidebarView } from '@/types';
 
 const initialProjects: Project[] = [
   {
     id: '1',
+    kind: 'project',
     name: '基金对比研究 Dashboard',
     description: '对比多只基金的收益、回撤、波动率与持仓',
     starred: true,
@@ -14,6 +15,7 @@ const initialProjects: Project[] = [
   },
   {
     id: '2',
+    kind: 'project',
     name: '组合健康诊断',
     description: '分析基金组合的资产配置、相关性与风险',
     starred: true,
@@ -22,6 +24,7 @@ const initialProjects: Project[] = [
   },
   {
     id: '3',
+    kind: 'project',
     name: '市场早报网页',
     description: '聚合行情、财经资讯与基金经理观点',
     starred: false,
@@ -30,6 +33,7 @@ const initialProjects: Project[] = [
   },
   {
     id: '4',
+    kind: 'project',
     name: '家庭财富规划报告',
     description: '覆盖收支、资产负债、目标与配置建议',
     starred: false,
@@ -38,6 +42,7 @@ const initialProjects: Project[] = [
   },
   {
     id: '5',
+    kind: 'project',
     name: '基金筛选工具',
     description: '按绩效、风险与产品属性筛选基金',
     starred: false,
@@ -46,6 +51,7 @@ const initialProjects: Project[] = [
   },
   {
     id: '6',
+    kind: 'project',
     name: '资产配置模拟器',
     description: '根据目标需求模拟不同资产配置方案',
     starred: false,
@@ -56,6 +62,7 @@ const initialProjects: Project[] = [
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [frontView, setFrontView] = useState<SidebarView>('home');
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -74,6 +81,7 @@ function App() {
   const createProject = (prompt: string) => {
     const newProject: Project = {
       id: Date.now().toString(),
+      kind: 'project',
       name: prompt.slice(0, 40) + (prompt.length > 40 ? '...' : ''),
       description: prompt,
       starred: false,
@@ -151,6 +159,8 @@ function App() {
 
   return (
     <FrontPage
+      activeView={frontView}
+      onViewChange={setFrontView}
       projects={projects}
       onToggleStar={handleToggleStar}
       onOpenProject={handleOpenProject}

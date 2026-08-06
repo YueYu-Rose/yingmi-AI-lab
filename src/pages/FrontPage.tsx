@@ -3,9 +3,12 @@ import { FolderKanban } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import PromptBox from '@/components/PromptBox';
 import ProjectGrid from '@/components/ProjectGrid';
+import ToolsPage from '@/pages/ToolsPage';
 import type { SidebarView, Project } from '@/types';
 
 interface FrontPageProps {
+  activeView: SidebarView;
+  onViewChange: (view: SidebarView) => void;
   projects: Project[];
   onToggleStar: (id: string) => void;
   onOpenProject: (id: string) => void;
@@ -16,7 +19,8 @@ interface FrontPageProps {
 
 const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
   home: () => true,
-  projects: () => true,
+  tools: () => false,
+  workspace: () => true,
   starred: (p) => p.starred,
   recent: (p) => p.lastViewed !== undefined,
   shared: (p) => p.sharedBy !== undefined,
@@ -24,11 +28,12 @@ const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
 };
 
 
-export default function FrontPage({ projects, onToggleStar, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
-  const [activeView, setActiveView] = useState<SidebarView>('home');
+export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const isHome = activeView === 'home';
+  const isTools = activeView === 'tools';
+  const isWorkspace = activeView === 'workspace' || activeView === 'starred' || activeView === 'recent' || activeView === 'shared';
 
   const filteredProjects = projects
     .filter(viewFilters[activeView] || (() => true))
@@ -42,15 +47,15 @@ export default function FrontPage({ projects, onToggleStar, onOpenProject, onNew
     <div className="flex h-screen bg-bolt-light-2">
       <Sidebar
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={onViewChange}
         onOpenProject={onOpenProject}
         projects={projects}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        {!isHome && (
-          <div className="h-14 border-b border-bolt-light-5 bg-white flex items-center px-6 gap-4">
+        {isWorkspace && (
+          <div className="min-h-14 border-b border-bolt-light-5 bg-white flex items-center px-6 gap-4">
             <div className="relative flex-1 max-w-md">
               <input
                 type="text"
@@ -59,6 +64,23 @@ export default function FrontPage({ projects, onToggleStar, onOpenProject, onNew
                 placeholder="搜索项目..."
                 className="w-full pl-3 pr-3 py-1.5 rounded-lg border border-bolt-light-5 bg-bolt-light-2 text-[13px] text-bolt-light-12 placeholder:text-bolt-light-7 outline-none focus:border-bolt-blue focus:bg-white transition-colors duration-150"
               />
+            </div>
+            <div className="ml-auto flex items-center rounded-lg bg-bolt-light-3 p-1">
+              {([
+                ['workspace', '全部项目'],
+                ['starred', '已加星标'],
+                ['recent', '最近查看'],
+                ['shared', '共享给你'],
+              ] as [SidebarView, string][]).map(([view, label]) => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => onViewChange(view)}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${activeView === view ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -70,15 +92,15 @@ export default function FrontPage({ projects, onToggleStar, onOpenProject, onNew
               <div className="w-full">
                 <PromptBox onSubmit={onNewProject} />
 
-                {/* Recent projects strip */}
+                {/* Recent chats and projects strip */}
                 {projects.length > 0 && (
                   <div className="max-w-3xl mx-auto mt-12">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-[13px] font-semibold text-bolt-light-9 tracking-wider">
-                        最近的项目
+                        最近
                       </h3>
                       <button
-                        onClick={() => setActiveView('projects')}
+                        onClick={() => onViewChange('workspace')}
                         className="text-[13px] text-bolt-blue hover:underline font-medium"
                       >
                         查看全部
@@ -109,6 +131,8 @@ export default function FrontPage({ projects, onToggleStar, onOpenProject, onNew
                 )}
               </div>
             </div>
+          ) : isTools ? (
+            <ToolsPage onStartCreating={() => onViewChange('home')} />
           ) : (
             <ProjectGrid
               view={activeView}
