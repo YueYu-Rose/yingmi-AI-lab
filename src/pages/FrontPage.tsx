@@ -43,7 +43,6 @@ export default function FrontPage({ projects, onToggleStar, onOpenProject, onNew
       <Sidebar
         activeView={activeView}
         onViewChange={setActiveView}
-        onNewProject={() => onNewProject('')}
         onOpenProject={onOpenProject}
         projects={projects}
       />

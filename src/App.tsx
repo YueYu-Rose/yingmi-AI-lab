@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FrontPage from '@/pages/FrontPage';
 import DesignPage from '@/pages/DesignPage';
 import type { Page, Project } from '@/types';
@@ -6,48 +6,48 @@ import type { Page, Project } from '@/types';
 const initialProjects: Project[] = [
   {
     id: '1',
-    name: '作品集网站',
-    description: '展示个人项目的作品集网站',
+    name: '基金对比研究 Dashboard',
+    description: '对比多只基金的收益、回撤、波动率与持仓',
     starred: true,
     lastViewed: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
   },
   {
     id: '2',
-    name: '加密货币仪表盘',
-    description: '实时加密货币价格追踪器，带图表展示',
+    name: '组合健康诊断',
+    description: '分析基金组合的资产配置、相关性与风险',
     starred: true,
     lastViewed: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
   },
   {
     id: '3',
-    name: '食谱应用',
-    description: '浏览和收藏你喜欢的食谱',
+    name: '市场早报网页',
+    description: '聚合行情、财经资讯与基金经理观点',
     starred: false,
     lastViewed: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
   },
   {
     id: '4',
-    name: '团队落地页',
-    description: 'SaaS产品的营销落地页',
+    name: '家庭财富规划报告',
+    description: '覆盖收支、资产负债、目标与配置建议',
     starred: false,
     sharedBy: 'Sarah K.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
   },
   {
     id: '5',
-    name: '数据分析平台',
-    description: '带筛选功能的数据可视化仪表盘',
+    name: '基金筛选工具',
+    description: '按绩效、风险与产品属性筛选基金',
     starred: false,
     sharedBy: 'Mike R.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
   },
   {
     id: '6',
-    name: '预约系统',
-    description: '带日历的预约排程应用',
+    name: '资产配置模拟器',
+    description: '根据目标需求模拟不同资产配置方案',
     starred: false,
     lastViewed: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
@@ -57,27 +57,57 @@ const initialProjects: Project[] = [
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
-
-  const handleOpenProject = (id: string) => {
-    const project = projects.find((p) => p.id === id);
-    if (project) {
-      setActiveProject(project);
-      setCurrentPage('design');
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const savedProjects = window.localStorage.getItem('yingmi-lab-projects');
+      return savedProjects ? JSON.parse(savedProjects) : initialProjects;
+    } catch {
+      return initialProjects;
     }
-  };
+  });
 
-  const handleNewProject = (prompt: string) => {
+  useEffect(() => {
+    window.localStorage.setItem('yingmi-lab-projects', JSON.stringify(projects));
+  }, [projects]);
+
+  const createProject = (prompt: string) => {
     const newProject: Project = {
       id: Date.now().toString(),
-      name: prompt ? prompt.slice(0, 40) + (prompt.length > 40 ? '...' : '') : '未命名项目',
-      description: prompt || '一个新的 Bolt 项目',
+      name: prompt.slice(0, 40) + (prompt.length > 40 ? '...' : ''),
+      description: prompt,
       starred: false,
       createdAt: new Date().toISOString(),
     };
     setProjects((prev) => [newProject, ...prev]);
     setActiveProject(newProject);
+    return newProject;
+  };
+
+  const handleOpenProject = (id: string) => {
+    const project = projects.find((p) => p.id === id);
+    if (project) {
+      setActiveProject(project);
+      setInitialPrompt(null);
+      setCurrentPage('design');
+    }
+  };
+
+  const handleNewProject = (prompt: string) => {
+    if (prompt.trim()) {
+      createProject(prompt.trim());
+      setInitialPrompt(prompt.trim());
+    } else {
+      setActiveProject(null);
+      setInitialPrompt(null);
+    }
     setCurrentPage('design');
+  };
+
+  const handleCreateProjectFromDraft = (prompt: string) => {
+    const project = createProject(prompt);
+    setInitialPrompt(prompt);
+    return project;
   };
 
   const handleToggleStar = (id: string) => {
@@ -105,10 +135,18 @@ function App() {
   const handleBack = () => {
     setCurrentPage('home');
     setActiveProject(null);
+    setInitialPrompt(null);
   };
 
-  if (currentPage === 'design' && activeProject) {
-    return <DesignPage project={activeProject} onBack={handleBack} />;
+  if (currentPage === 'design') {
+    return (
+      <DesignPage
+        project={activeProject}
+        initialPrompt={initialPrompt}
+        onCreateProject={handleCreateProjectFromDraft}
+        onBack={handleBack}
+      />
+    );
   }
 
   return (

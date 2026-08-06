@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Paperclip, Sliders, Palette, AtSign, Sparkles, ChevronDown } from 'lucide-react';
+import { ArrowUp, Paperclip, Sparkles, ListChecks } from 'lucide-react';
 
 interface PromptBoxProps {
   onSubmit: (prompt: string) => void;
@@ -7,10 +7,10 @@ interface PromptBoxProps {
 }
 
 const suggestions = [
-  '一个SaaS产品的落地页',
-  '一个带图表和表格的仪表盘',
-  '一个带深色模式的作品集网站',
-  '一个电商产品页面',
+  '创建一个基金对比研究 Dashboard',
+  '做一个基金组合健康诊断工具',
+  '生成一份市场早报网页',
+  '创建一个家庭财富规划应用',
 ];
 
 export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps) {
@@ -31,6 +31,11 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
     setValue('');
   };
 
+  const handleOptimize = () => {
+    setValue((current) => current.trim() || '创建一个基金对比研究 Dashboard，对比三只基金近三年的收益、最大回撤、波动率、基金经理和主要持仓，并生成可视化图表与研究摘要。');
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -42,12 +47,12 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
     <div className="w-full max-w-3xl mx-auto">
       {!compact && (
         <h1 className={`text-center font-bold text-bolt-light-12 tracking-tight mb-3 animate-fade-in ${compact ? 'text-2xl' : 'text-[2.5rem]'}`}>
-          今天想构建什么？
+          用盈米能力，创建你的金融应用
         </h1>
       )}
       {!compact && (
         <p className="text-center text-bolt-light-8 text-[15px] mb-8 animate-fade-in">
-          通过与AI对话，创建令人惊艳的应用和网站。
+          发送需求后，AI 会展示思考与计划流程，并自动开始构建。
         </p>
       )}
 
@@ -65,7 +70,7 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="来构建一个原型..."
+          placeholder="例如：创建一个基金对比研究 Dashboard..."
           rows={compact ? 1 : 2}
           className={`w-full bg-transparent resize-none outline-none px-5 pt-4 text-[15px] text-bolt-light-12 placeholder:text-bolt-light-7 ${
             compact ? 'pb-2' : 'pb-3'
@@ -74,29 +79,20 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
 
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-0.5">
-            <button className="p-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150" title="附件">
+            <button disabled className="p-2 rounded-lg text-bolt-light-7 cursor-not-allowed" title="Demo 中暂未开放附件">
               <Paperclip className="w-[18px] h-[18px]" />
             </button>
-            <button className="p-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150" title="提及文件">
-              <AtSign className="w-[18px] h-[18px]" />
-            </button>
-            <button className="p-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150" title="设计系统">
-              <Palette className="w-[18px] h-[18px]" />
-            </button>
-            <button className="p-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150" title="设置">
-              <Sliders className="w-[18px] h-[18px]" />
-            </button>
-            <button className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150 text-[13px] font-medium">
+            <button onClick={handleOptimize} className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150 text-[13px] font-medium">
               <Sparkles className="w-[15px] h-[15px]" />
               优化
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150 text-[13px] font-medium">
-              Bolt 智能体
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
+            <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-bolt-blue-light text-bolt-blue text-[12px] font-semibold">
+              <ListChecks className="w-3.5 h-3.5" />
+              Plan Mode
+            </span>
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
