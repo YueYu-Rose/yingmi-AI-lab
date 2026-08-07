@@ -13,8 +13,8 @@ interface ProjectGridProps {
 
 function getViewConfig(view: SidebarView): { title: string; subtitle: string; icon: typeof FolderKanban } {
   switch (view) {
-    case 'projects':
-      return { title: '项目', subtitle: '所有项目集中管理', icon: FolderKanban };
+    case 'workspace':
+      return { title: '工作空间', subtitle: '集中管理你创建的所有项目', icon: FolderKanban };
     case 'starred':
       return { title: '已加星标', subtitle: '你收藏的项目', icon: Star };
     case 'recent':
@@ -98,7 +98,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
           {[
-            { title: '入门指南', desc: '了解 Bolt 的基础知识', icon: Sparkles, color: 'bg-bolt-blue' },
+          { title: '入门指南', desc: '了解盈米的基础知识', icon: Sparkles, color: 'bg-bolt-blue' },
             { title: '项目与文件', desc: '管理、组织和分享你的工作', icon: FolderKanban, color: 'bg-bolt-green' },
             { title: '发布与托管', desc: '将项目部署到网络', icon: Users, color: 'bg-bolt-orange' },
             { title: '账户与账单', desc: '管理你的订阅和令牌', icon: Star, color: 'bg-bolt-purple' },
