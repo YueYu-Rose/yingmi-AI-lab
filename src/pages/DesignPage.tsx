@@ -57,7 +57,7 @@ interface DesignPageProps {
   onBack: () => void;
 }
 
-type ViewMode = 'preview' | 'code';
+type ViewMode = 'preview' | 'code' | 'capabilities';
 type DeviceMode = 'desktop' | 'mobile';
 type BuildPhase = 'waiting' | 'clarifying' | 'thinking' | 'planning' | 'building' | 'ready';
 
@@ -89,6 +89,37 @@ interface ExecutionStep {
   type: 'MCP' | 'Skill';
   detail: string;
 }
+
+type CapabilityKind = 'MCP' | 'Skill' | 'Agent' | 'Component';
+
+interface CapabilityRecord {
+  name: string;
+  type: CapabilityKind;
+  detail: string;
+}
+
+/** 基金对比项目：打开时预填到输入框，发送后演示 Plan / 能力变化 */
+const COMPARISON_FOLLOWUP_DEMO: {
+  prompt: string;
+  assistant: string;
+  steps: ExecutionStep[];
+  capabilities: CapabilityRecord[];
+} = {
+  prompt: '再加一列基金经理任职年限，并高亮回撤超过 15% 的基金',
+  assistant: '已按你的要求更新对比表：新增基金经理任职年限，并对回撤超过 15% 的标的做了高亮提示。本轮 Plan 与能力汇总已同步。',
+  steps: [
+    { name: '批量获取基金详情', type: 'MCP', detail: '补充基金经理与任职年限信息' },
+    { name: 'fund-analyst', type: 'Skill', detail: '按回撤阈值标注风险标的' },
+    { name: 'design-data-visualization', type: 'Skill', detail: '更新表格列与高亮样式' },
+  ],
+  capabilities: [
+    { name: '批量获取基金详情', type: 'MCP', detail: '补充基金经理与任职年限信息' },
+    { name: 'fund-analyst', type: 'Skill', detail: '按回撤阈值标注风险标的' },
+    { name: 'design-data-visualization', type: 'Skill', detail: '更新表格列与高亮样式' },
+    { name: 'fund-compare-agent', type: 'Agent', detail: '编排对比表增强所需的 MCP 与 Skills' },
+    { name: 'RiskHighlightTable', type: 'Component', detail: '回撤超阈值高亮表格组件' },
+  ],
+};
 
 interface PreviewConfig {
   metrics: [string, string, string][];
@@ -232,6 +263,23 @@ function getScenario(project: Project): ScenarioConfig {
   return SCENARIOS[0];
 }
 
+function defaultProjectCapabilities(scenario: ScenarioConfig): CapabilityRecord[] {
+  const agentName = scenario.key === 'comparison' ? 'fund-compare-agent' : `${scenario.key}-agent`;
+  return [
+    ...scenario.steps,
+    {
+      name: agentName,
+      type: 'Agent',
+      detail: `编排「${scenario.title}」相关的 MCP 与 Skills`,
+    },
+    {
+      name: 'ResultDashboard',
+      type: 'Component',
+      detail: '结果预览与数据展示主界面组件',
+    },
+  ];
+}
+
 const performanceData = [
   { month: '3月', '稳健成长A': 100, '均衡价值A': 100, '红利低波A': 100 },
   { month: '4月', '稳健成长A': 101.8, '均衡价值A': 101.1, '红利低波A': 100.7 },
@@ -247,17 +295,23 @@ const fundRows = [
   { name: '红利低波A', code: '000003', return: '+7.6%', drawdown: '-3.9%', volatility: '8.6%', risk: '中低' },
 ];
 
-function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; currentStep: number; scenario: ScenarioConfig }) {
+function PlanCard({ phase, currentStep, steps, title, planDescription }: {
+  phase: BuildPhase;
+  currentStep: number;
+  steps: ExecutionStep[];
+  title: string;
+  planDescription: string;
+}) {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(() => new Set());
   const [flowOpen, setFlowOpen] = useState(phase === 'planning');
 
-  const mcpSteps = scenario.steps.filter((step) => step.type === 'MCP');
-  const skillSteps = scenario.steps.filter((step) => step.type === 'Skill');
+  const mcpSteps = steps.filter((step) => step.type === 'MCP');
+  const skillSteps = steps.filter((step) => step.type === 'Skill');
 
   useEffect(() => {
     if (phase === 'planning') setFlowOpen(true);
     if (phase === 'building' || phase === 'ready') setFlowOpen(false);
-  }, [phase, scenario.key]);
+  }, [phase, title]);
 
   useEffect(() => {
     if (currentStep < 0) {
@@ -265,9 +319,9 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
       return;
     }
 
-    const visibleStep = Math.min(currentStep, scenario.steps.length - 1);
+    const visibleStep = Math.min(currentStep, steps.length - 1);
     setExpandedSteps(new Set([visibleStep]));
-  }, [currentStep, scenario.key, scenario.steps.length]);
+  }, [currentStep, title, steps.length]);
 
   const toggleStep = (index: number) => {
     setExpandedSteps((current) => {
@@ -292,7 +346,7 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
           ) : (
             <Check className="w-3.5 h-3.5 text-bolt-green" />
           )}
-          <span>{phase === 'planning' ? '正在生成思考与执行计划' : `已完成思考与执行计划 · ${scenario.steps.length} 步`}</span>
+          <span>{phase === 'planning' ? '正在生成思考与执行计划' : `已完成思考与执行计划 · ${steps.length} 步`}</span>
           {phase !== 'planning' && (
             <span className="basis-full pl-[22px] text-[11px] font-normal leading-relaxed text-bolt-light-7">
               {mcpSteps.length} 个 MCP：{mcpSteps.map((step) => step.name).join('、')} · {skillSteps.length} 个 Skills：{skillSteps.map((step) => step.name).join('、')}
@@ -305,13 +359,13 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
       {flowOpen && (
         <div data-testid="thinking-flow-content" className="space-y-4 pt-3 animate-fade-in">
           <p className="px-1 text-[13.5px] leading-relaxed text-bolt-light-11">
-            我来帮你完成「{scenario.title}」。我会先检查需要的数据和金融能力，再生成页面。
+            我来帮你完成「{title}」。我会先检查需要的数据和金融能力，再生成页面。
           </p>
 
-          {scenario.steps.map((step, index) => {
+          {steps.map((step, index) => {
             const expanded = expandedSteps.has(index);
             return (
-              <div key={step.name} className="px-1">
+              <div key={`${step.name}-${index}`} className="px-1">
                 <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}。</p>
                 <button
                   type="button"
@@ -349,7 +403,7 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
             );
           })}
 
-          <p className="px-1 pt-1 text-[13.5px] leading-relaxed text-bolt-light-11">执行计划已准备好。{scenario.planDescription}</p>
+          <p className="px-1 pt-1 text-[13.5px] leading-relaxed text-bolt-light-11">执行计划已准备好。{planDescription}</p>
 
           <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
@@ -370,21 +424,21 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
 function ExecutionChain({
   phase,
   currentStep,
-  scenario,
+  steps,
 }: {
   phase: BuildPhase;
   currentStep: number;
-  scenario: ScenarioConfig;
+  steps: ExecutionStep[];
 }) {
   const [chainOpen, setChainOpen] = useState(phase === 'building');
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(() => new Set());
 
   const visibleCount = phase === 'ready'
-    ? scenario.steps.length
-    : Math.min(Math.max(currentStep + 1, 0), scenario.steps.length);
-  const visibleSteps = scenario.steps.slice(0, visibleCount);
-  const mcpSteps = scenario.steps.filter((step) => step.type === 'MCP');
-  const skillSteps = scenario.steps.filter((step) => step.type === 'Skill');
+    ? steps.length
+    : Math.min(Math.max(currentStep + 1, 0), steps.length);
+  const visibleSteps = steps.slice(0, visibleCount);
+  const mcpSteps = steps.filter((step) => step.type === 'MCP');
+  const skillSteps = steps.filter((step) => step.type === 'Skill');
 
   useEffect(() => {
     if (phase === 'building') setChainOpen(true);
@@ -393,8 +447,8 @@ function ExecutionChain({
 
   useEffect(() => {
     if (phase !== 'building' || currentStep < 0) return;
-    setExpandedSteps(new Set([Math.min(currentStep, scenario.steps.length - 1)]));
-  }, [phase, currentStep, scenario.steps.length]);
+    setExpandedSteps(new Set([Math.min(currentStep, steps.length - 1)]));
+  }, [phase, currentStep, steps.length]);
 
   const toggleStep = (index: number) => {
     setExpandedSteps((current) => {
@@ -423,8 +477,8 @@ function ExecutionChain({
           )}
           <span>
             {phase === 'building'
-              ? `正在执行计划 · ${visibleCount}/${scenario.steps.length} 步`
-              : `已完成思考与执行计划 · ${scenario.steps.length} 步`}
+              ? `正在执行计划 · ${visibleCount}/${steps.length} 步`
+              : `已完成思考与执行计划 · ${steps.length} 步`}
           </span>
           {phase === 'ready' && (
             <span className="basis-full pl-[22px] text-[11px] font-normal leading-relaxed text-bolt-light-7">
@@ -441,7 +495,7 @@ function ExecutionChain({
             const expanded = expandedSteps.has(index);
             const isActive = phase === 'building' && index === currentStep;
             return (
-              <div key={step.name} className="px-1 animate-fade-in">
+              <div key={`${step.name}-${index}`} className="px-1 animate-fade-in">
                 <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}</p>
                 <div className="rounded-xl border border-bolt-light-5 bg-white overflow-hidden">
                   <button
@@ -637,13 +691,6 @@ function ComparisonPreview({
             </table>
           </div>
         </EditableBlock>
-
-        <div className="rounded-lg border border-bolt-light-5 bg-white px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 text-[10.5px] text-bolt-light-8">
-          <span className="font-semibold text-bolt-light-10">本次使用记录</span>
-          <span>{scenario.steps.filter((step) => step.type === 'MCP').length} 个盈米 MCP 工具</span>
-          {scenario.steps.filter((step) => step.type === 'Skill').map((step) => <span key={step.name}>{step.name}</span>)}
-          <span className="ml-auto">数据来源：Demo 模拟数据</span>
-        </div>
       </div>
     </div>
   );
@@ -752,13 +799,6 @@ function ScenarioPreview({
               <p className="rounded-lg bg-bolt-light-3 p-3">本页为产品 Demo，所有名称与数据均为模拟内容。</p>
             </div>
           </EditableBlock>
-        </div>
-
-        <div className="rounded-lg border border-bolt-light-5 bg-white px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 text-[10.5px] text-bolt-light-8">
-          <span className="font-semibold text-bolt-light-10">本次使用记录</span>
-          <span>{scenario.steps.filter((step) => step.type === 'MCP').length} 个盈米 MCP 工具</span>
-          {scenario.steps.filter((step) => step.type === 'Skill').map((step) => <span key={step.name}>{step.name}</span>)}
-          <span className="ml-auto">数据来源：Demo 模拟数据</span>
         </div>
       </div>
     </div>
@@ -1205,7 +1245,7 @@ function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
 
   return (
     <div data-testid="code-workspace" className="flex h-full w-full overflow-hidden rounded-lg border border-bolt-light-5 bg-white shadow-md">
-      <aside className="flex w-[240px] shrink-0 flex-col border-r border-bolt-light-5 bg-bolt-light-2">
+      <aside className="flex w-[220px] shrink-0 flex-col border-r border-bolt-light-5 bg-bolt-light-2">
         <div className="border-b border-bolt-light-5 px-3 py-3">
           <p className="mb-2 text-[13px] font-semibold text-bolt-light-12">代码</p>
           <div className="relative">
@@ -1272,16 +1312,178 @@ function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
   );
 }
 
-function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase; currentStep: number; scenario: ScenarioConfig }) {
+type CapabilityUsage = {
+  name: string;
+  type: CapabilityKind;
+  detail: string;
+  count: number;
+};
+
+const CAPABILITY_BADGE_CLASS: Record<CapabilityKind, string> = {
+  MCP: 'bg-bolt-blue-light text-bolt-blue',
+  Skill: 'bg-violet-50 text-bolt-purple',
+  Agent: 'bg-emerald-50 text-emerald-700',
+  Component: 'bg-amber-50 text-amber-700',
+};
+
+const CAPABILITY_TYPE_LABEL: Record<CapabilityKind, string> = {
+  MCP: 'MCP',
+  Skill: 'Skill',
+  Agent: 'Agent',
+  Component: '组件',
+};
+
+function aggregateCapabilityUsage(steps: CapabilityRecord[]): {
+  mcpItems: CapabilityUsage[];
+  skillItems: CapabilityUsage[];
+  agentItems: CapabilityUsage[];
+  componentItems: CapabilityUsage[];
+} {
+  const byKey = new Map<string, CapabilityUsage>();
+  for (const step of steps) {
+    const key = `${step.type}:${step.name}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byKey.set(key, {
+        name: step.name,
+        type: step.type,
+        detail: step.detail,
+        count: 1,
+      });
+    }
+  }
+  const items = Array.from(byKey.values());
+  return {
+    mcpItems: items.filter((item) => item.type === 'MCP'),
+    skillItems: items.filter((item) => item.type === 'Skill'),
+    agentItems: items.filter((item) => item.type === 'Agent'),
+    componentItems: items.filter((item) => item.type === 'Component'),
+  };
+}
+
+function CapabilitiesWorkspace({
+  usageSteps,
+  ready,
+}: {
+  usageSteps: CapabilityRecord[];
+  ready: boolean;
+}) {
+  const { mcpItems, skillItems, agentItems, componentItems } = aggregateCapabilityUsage(ready ? usageSteps : []);
+  const totalCalls =
+    mcpItems.reduce((sum, item) => sum + item.count, 0) +
+    skillItems.reduce((sum, item) => sum + item.count, 0) +
+    agentItems.reduce((sum, item) => sum + item.count, 0) +
+    componentItems.reduce((sum, item) => sum + item.count, 0);
+
+  return (
+    <div
+      data-testid="capabilities-workspace"
+      className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-bolt-light-5 bg-white shadow-md"
+    >
+      <div className="border-b border-bolt-light-5 px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-bolt-light-12">能力</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-bolt-light-7">
+              本项目累计使用的盈米 MCP、Skills、Agent 与组件
+            </p>
+          </div>
+          {ready && (
+            <div className="shrink-0 rounded-lg bg-bolt-light-3 px-3 py-2 text-right">
+              <p className="text-[10px] font-medium text-bolt-light-7">合计调用</p>
+              <p className="text-[16px] font-semibold tabular-nums text-bolt-light-12">{totalCalls}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5">
+        {!ready ? (
+          <div className="flex h-full min-h-[200px] flex-col items-center justify-center text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-bolt-light-3">
+              <Sparkles className="h-6 w-6 text-bolt-light-7" />
+            </div>
+            <p className="text-[13.5px] font-medium text-bolt-light-10">尚未汇总能力使用</p>
+            <p className="mt-1.5 max-w-sm text-[12.5px] leading-relaxed text-bolt-light-7">
+              构建完成后将汇总本项目使用的 MCP、Skills、Agent 与组件
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-2">
+            <CapabilityGroup title="MCP" items={mcpItems} emptyLabel="暂无 MCP 记录" />
+            <CapabilityGroup title="Skills" items={skillItems} emptyLabel="暂无 Skills 记录" />
+            <CapabilityGroup title="Agent" items={agentItems} emptyLabel="暂无 Agent 记录" />
+            <CapabilityGroup title="组件" items={componentItems} emptyLabel="暂无组件记录" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CapabilityGroup({
+  title,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  items: CapabilityUsage[];
+  emptyLabel: string;
+}) {
+  return (
+    <section>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="text-[12px] font-semibold tracking-wide text-bolt-light-8">{title}</h3>
+        <span className="text-[11px] tabular-nums text-bolt-light-7">{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-bolt-light-5 bg-bolt-light-2 px-3 py-6 text-center text-[12px] text-bolt-light-7">
+          {emptyLabel}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((item) => (
+            <li key={`${item.type}-${item.name}`} className="rounded-lg border border-bolt-light-5 bg-bolt-light-2 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${CAPABILITY_BADGE_CLASS[item.type]}`}>
+                  {CAPABILITY_TYPE_LABEL[item.type]}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-bolt-light-11">{item.name}</span>
+                <span className="shrink-0 text-[11px] tabular-nums text-bolt-light-7">使用 {item.count} 次</span>
+              </div>
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-bolt-light-7">{item.detail}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ExecutionPlanDock({
+  phase,
+  currentStep,
+  title,
+  steps,
+}: {
+  phase: BuildPhase;
+  currentStep: number;
+  title: string;
+  steps: ExecutionStep[];
+}) {
   const [open, setOpen] = useState(phase === 'thinking' || phase === 'planning' || phase === 'building');
+  const isRunning = phase === 'thinking' || phase === 'planning' || phase === 'building';
+  const isDone = phase === 'ready';
 
   useEffect(() => {
-    if (phase === 'thinking' || phase === 'planning' || phase === 'building') setOpen(true);
-    if (phase === 'ready') setOpen(false);
-  }, [phase]);
+    if (isRunning) setOpen(true);
+    if (isDone) setOpen(false);
+  }, [isDone, isRunning]);
 
-  const completedCount = phase === 'ready'
-    ? scenario.steps.length
+  const completedCount = isDone
+    ? steps.length
     : phase === 'building'
       ? Math.max(0, currentStep)
       : 0;
@@ -1292,16 +1494,13 @@ function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase
       : phase === 'planning'
         ? '正在生成执行计划'
         : phase === 'building'
-          ? scenario.steps[currentStep]?.name ?? '正在执行计划'
-          : `${scenario.title} 已完成`;
+          ? steps[currentStep]?.name ?? '正在执行计划'
+          : `${title} 已完成`;
 
-  const recentStepIndex = phase === 'ready'
-    ? scenario.steps.length - 1
-    : phase === 'building'
-      ? Math.min(Math.max(currentStep, 0), scenario.steps.length - 1)
-      : -1;
-  const recentStep = recentStepIndex >= 0 ? scenario.steps[recentStepIndex] : undefined;
-  const recentStepDone = phase === 'ready';
+  const activeStepIndex = phase === 'building'
+    ? Math.min(Math.max(currentStep, 0), Math.max(steps.length - 1, 0))
+    : -1;
+  const activeStep = activeStepIndex >= 0 ? steps[activeStepIndex] : undefined;
 
   return (
     <div data-testid="execution-plan-dock" className="mx-3 rounded-xl border border-bolt-light-5 bg-white shadow-sm overflow-hidden">
@@ -1311,42 +1510,52 @@ function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase
         aria-expanded={open}
         className="w-full min-h-12 px-3.5 flex items-center gap-2 text-left hover:bg-bolt-light-2 transition-colors"
       >
-        {phase === 'ready' ? (
+        {isDone ? (
           <Check className="w-4 h-4 shrink-0 text-bolt-green" />
-        ) : phase === 'planning' || phase === 'building' || phase === 'thinking' ? (
+        ) : isRunning ? (
           <Loader2 className="w-4 h-4 shrink-0 text-bolt-blue animate-spin" />
         ) : (
           <ListChecks className="w-4 h-4 shrink-0 text-bolt-light-7" />
         )}
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-bolt-light-11">{currentLabel}</span>
-        <span className="text-[11.5px] tabular-nums text-bolt-light-7">{completedCount}/{scenario.steps.length}</span>
+        <span className="text-[11.5px] tabular-nums text-bolt-light-7">{completedCount}/{steps.length || 0}</span>
         {open ? <ChevronUp className="w-4 h-4 shrink-0 text-bolt-light-7" /> : <ChevronDown className="w-4 h-4 shrink-0 text-bolt-light-7" />}
       </button>
 
       {open && (
         <div data-testid="execution-plan-dock-content" className="border-t border-bolt-light-5 px-3 py-2 animate-fade-in">
-          <div data-testid="execution-plan-recent-step" className={`flex items-start gap-2 rounded-lg px-2 py-2.5 ${recentStepDone ? '' : 'bg-bolt-blue-light'}`}>
-            {recentStepDone ? (
-              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-bolt-green" />
-            ) : (
-              <Loader2 className="w-4 h-4 mt-0.5 shrink-0 text-bolt-blue animate-spin" />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className={`min-w-0 flex-1 truncate text-[11.5px] font-medium ${recentStepDone ? 'text-bolt-light-9' : 'text-bolt-blue'}`}>
-                  {recentStep?.name ?? currentLabel}
-                </span>
-                {recentStep && (
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${recentStep.type === 'MCP' ? 'bg-bolt-blue-light text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
-                    {recentStep.type}
+          {isDone ? (
+            <div data-testid="execution-plan-all-steps" className="space-y-0.5">
+              {steps.map((step) => (
+                <div key={step.name} className="flex items-center gap-2 rounded-lg px-2 py-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-bolt-green" />
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-bolt-light-9">{step.name}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${step.type === 'MCP' ? 'bg-bolt-blue-light text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
+                    {step.type}
                   </span>
-                )}
-              </div>
-              <p className="mt-1 text-[10.5px] leading-relaxed text-bolt-light-7">
-                {recentStep?.detail ?? (phase === 'thinking' ? '正在识别项目类型，并匹配所需的盈米 MCP 与 Skills。' : '正在整理执行步骤与能力调用顺序。')}
-              </p>
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div data-testid="execution-plan-recent-step" className="flex items-start gap-2 rounded-lg bg-bolt-blue-light px-2 py-2.5">
+              <Loader2 className="w-4 h-4 mt-0.5 shrink-0 text-bolt-blue animate-spin" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-bolt-blue">
+                    {activeStep?.name ?? currentLabel}
+                  </span>
+                  {activeStep && (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${activeStep.type === 'MCP' ? 'bg-white/80 text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
+                      {activeStep.type}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[10.5px] leading-relaxed text-bolt-light-7">
+                  {activeStep?.detail ?? (phase === 'thinking' ? '正在识别项目类型，并匹配所需的盈米 MCP 与 Skills。' : '正在整理执行步骤与能力调用顺序。')}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1377,10 +1586,23 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [layoutMode] = useState<'focus' | 'three-column'>('focus');
   const [isRestoring, setIsRestoring] = useState(Boolean(project && !initialPrompt && project.kind !== 'chat'));
   const [showPlanPanel] = useState(true);
+  const isComparisonDemo =
+    Boolean(project && !initialPrompt && project.kind !== 'chat') && scenario.key === 'comparison';
+  const [initialPlanCommitted, setInitialPlanCommitted] = useState(
+    () => Boolean(project && !initialPrompt && project.kind !== 'chat')
+  );
+  const [activeSteps, setActiveSteps] = useState<ExecutionStep[]>(() => [...scenario.steps]);
+  const [capabilityLog, setCapabilityLog] = useState<CapabilityRecord[]>(() =>
+    project && !initialPrompt && project.kind !== 'chat' ? defaultProjectCapabilities(scenario) : []
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => (isComparisonDemo ? COMPARISON_FOLLOWUP_DEMO.prompt : ''));
   const [isRefining, setIsRefining] = useState(false);
   const replyTimerRef = useRef<number | null>(null);
+  const pendingCapabilityLogRef = useRef(false);
+  const pendingCapabilityRecordsRef = useRef<CapabilityRecord[] | null>(null);
+  const followUpPromptRef = useRef<string | null>(null);
+  const followUpAssistantRef = useRef<string | null>(null);
   const [previewExpired, setPreviewExpired] = useState(false);
   const [previewEditMode, setPreviewEditMode] = useState(false);
   const [selectedPreviewBlock, setSelectedPreviewBlock] = useState<string | null>(null);
@@ -1453,13 +1675,45 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       return () => window.clearTimeout(planningTimer);
     }
     if (phase !== 'building') return;
-    if (currentStep >= scenario.steps.length - 1) {
+    if (activeSteps.length === 0 || currentStep >= activeSteps.length - 1) {
       const doneTimer = window.setTimeout(() => setPhase('ready'), 800);
       return () => window.clearTimeout(doneTimer);
     }
     const stepTimer = window.setTimeout(() => setCurrentStep((step) => step + 1), 850);
     return () => window.clearTimeout(stepTimer);
-  }, [phase, currentStep, scenario.steps.length]);
+  }, [phase, currentStep, activeSteps.length]);
+
+  useEffect(() => {
+    if (phase !== 'ready') return;
+
+    if (pendingCapabilityLogRef.current) {
+      pendingCapabilityLogRef.current = false;
+      const records = pendingCapabilityRecordsRef.current ?? activeSteps;
+      pendingCapabilityRecordsRef.current = null;
+      setCapabilityLog((prev) => [...prev, ...records]);
+      setInitialPlanCommitted(true);
+
+      const followUp = followUpPromptRef.current;
+      if (followUp) {
+        followUpPromptRef.current = null;
+        const assistantContent =
+          followUpAssistantRef.current ??
+          `已按「${followUp}」完成更新。本轮重新调用了相关 MCP、Skills、Agent 与组件，右侧预览与能力汇总已同步。`;
+        followUpAssistantRef.current = null;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-assistant`,
+            role: 'assistant',
+            content: assistantContent,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+    } else if (capabilityLog.length === 0 && initialPlanCommitted) {
+      setCapabilityLog(defaultProjectCapabilities(scenario));
+    }
+  }, [phase, activeSteps, capabilityLog.length, initialPlanCommitted, scenario]);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -1523,7 +1777,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     setIsRefining(false);
 
     if (wasBuilding) {
-      if (phase === 'thinking') {
+      pendingCapabilityLogRef.current = false;
+      pendingCapabilityRecordsRef.current = null;
+      followUpPromptRef.current = null;
+      followUpAssistantRef.current = null;
+      if (phase === 'thinking' && !initialPlanCommitted) {
         setPhase('clarifying');
         setSelectorDone(true);
       } else {
@@ -1565,6 +1823,12 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     if (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') {
       if (project?.id) onPromoteToProject(project.id, content);
       setSelectorDone(true);
+      setActiveSteps(scenario.steps);
+      pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
+      pendingCapabilityLogRef.current = true;
+      followUpPromptRef.current = null;
+      setInitialPlanCommitted(false);
+      setCapabilityLog([]);
       setCurrentStep(-1);
       setPhase('thinking');
     }
@@ -1590,6 +1854,21 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       onPromoteToProject(project.id, nextPrompt);
     }
     setSelectorDone(true);
+    setActiveSteps(scenario.steps);
+    pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
+    pendingCapabilityLogRef.current = true;
+    followUpPromptRef.current = null;
+    setCurrentStep(-1);
+    setPhase('thinking');
+  };
+
+  const startComparisonFollowUp = (content: string) => {
+    followUpPromptRef.current = content;
+    followUpAssistantRef.current = COMPARISON_FOLLOWUP_DEMO.assistant;
+    setActiveSteps(COMPARISON_FOLLOWUP_DEMO.steps);
+    pendingCapabilityRecordsRef.current = COMPARISON_FOLLOWUP_DEMO.capabilities;
+    pendingCapabilityLogRef.current = true;
+    setCurrentStep(-1);
     setPhase('thinking');
   };
 
@@ -1656,6 +1935,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       timestamp: new Date().toISOString(),
     }]);
     setInput('');
+    if (scenario.key === 'comparison') {
+      startComparisonFollowUp(content);
+      return;
+    }
     respondToUserContent(content, 'ready');
   };
 
@@ -1865,7 +2148,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </div>
           )}
 
-          {phase === 'thinking' && (
+          {phase === 'thinking' && !initialPlanCommitted && (
             <div data-testid="thinking-status" className="rounded-xl border border-bolt-light-5 bg-white px-3.5 py-3 flex items-center gap-2 animate-slide-up">
               <Loader2 className="w-4 h-4 text-bolt-blue animate-spin" />
               <div>
@@ -1875,26 +2158,56 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </div>
           )}
 
-          {(phase === 'planning' || phase === 'building' || phase === 'ready') && <PlanCard phase={phase} currentStep={currentStep} scenario={scenario} />}
-
-          {(phase === 'building' || phase === 'ready') && (
-            <div data-testid="first-ai-response" className="flex justify-start animate-slide-up">
-              <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
-                计划已经生成。我会按计划调用盈米 MCP 与 Skills，现在开始构建「{scenario.title}」。
+          {initialPlanCommitted ? (
+            <>
+              <PlanCard
+                phase="ready"
+                currentStep={scenario.steps.length}
+                steps={scenario.steps}
+                title={scenario.title}
+                planDescription={scenario.planDescription}
+              />
+              <div data-testid="first-ai-response" className="flex justify-start animate-slide-up">
+                <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                  计划已经生成。我会按计划调用盈米 MCP 与 Skills，现在开始构建「{scenario.title}」。
+                </div>
               </div>
-            </div>
-          )}
-
-          {(phase === 'building' || phase === 'ready') && (
-            <ExecutionChain phase={phase} currentStep={currentStep} scenario={scenario} />
-          )}
-
-          {phase === 'ready' && (
-            <div className="flex justify-start animate-slide-up">
-              <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
-                {scenario.completion}
+              <ExecutionChain phase="ready" currentStep={scenario.steps.length} steps={scenario.steps} />
+              <div className="flex justify-start animate-slide-up">
+                <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                  {scenario.completion}
+                </div>
               </div>
-            </div>
+            </>
+          ) : (
+            <>
+              {(phase === 'planning' || phase === 'building' || phase === 'ready') && (
+                <PlanCard
+                  phase={phase}
+                  currentStep={currentStep}
+                  steps={scenario.steps}
+                  title={scenario.title}
+                  planDescription={scenario.planDescription}
+                />
+              )}
+              {(phase === 'building' || phase === 'ready') && (
+                <div data-testid="first-ai-response" className="flex justify-start animate-slide-up">
+                  <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                    计划已经生成。我会按计划调用盈米 MCP 与 Skills，现在开始构建「{scenario.title}」。
+                  </div>
+                </div>
+              )}
+              {(phase === 'building' || phase === 'ready') && (
+                <ExecutionChain phase={phase} currentStep={currentStep} steps={scenario.steps} />
+              )}
+              {phase === 'ready' && (
+                <div className="flex justify-start animate-slide-up">
+                  <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                    {scenario.completion}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {messages.map((message) =>
@@ -1927,7 +2240,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
         </div>
 
         {layoutMode === 'focus' && (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') && (
-          <ExecutionPlanDock phase={phase} currentStep={currentStep} scenario={scenario} />
+          <ExecutionPlanDock phase={phase} currentStep={currentStep} title={scenario.title} steps={activeSteps} />
         )}
 
         <div className={`p-3 ${layoutMode === 'three-column' ? 'border-t border-bolt-light-5' : 'pt-2'}`}>
@@ -2019,6 +2332,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             <button onClick={() => setViewMode('code')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium ${viewMode === 'code' ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
               <Code2 className="w-4 h-4" />
               代码
+            </button>
+            <button onClick={() => setViewMode('capabilities')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium ${viewMode === 'capabilities' ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
+              <Sparkles className="w-4 h-4" />
+              能力
             </button>
           </div>
 
@@ -2176,11 +2493,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                     <Loader2 className="w-8 h-8 text-white animate-spin" />
                   </div>
                   <h2 className="text-lg font-bold text-bolt-light-12 mb-2">正在执行基金研究计划</h2>
-                  <p className="text-bolt-light-8 text-sm">{scenario.steps[currentStep]?.name}</p>
+                  <p className="text-bolt-light-8 text-sm">{activeSteps[currentStep]?.name}</p>
                   <div className="w-64 h-2 rounded-full bg-bolt-light-4 mt-5 overflow-hidden">
-                    <div className="h-full rounded-full bg-bolt-blue transition-all duration-500" style={{ width: `${((currentStep + 1) / scenario.steps.length) * 100}%` }} />
+                    <div className="h-full rounded-full bg-bolt-blue transition-all duration-500" style={{ width: `${((currentStep + 1) / Math.max(activeSteps.length, 1)) * 100}%` }} />
                   </div>
-                  <p className="text-[11px] text-bolt-light-7 mt-2">{currentStep + 1} / {scenario.steps.length}</p>
+                  <p className="text-[11px] text-bolt-light-7 mt-2">{currentStep + 1} / {activeSteps.length}</p>
                 </div>
               ) : (
                 <PreviewChrome
@@ -2206,6 +2523,8 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 </PreviewChrome>
               )}
             </div>
+          ) : viewMode === 'capabilities' ? (
+            <CapabilitiesWorkspace usageSteps={capabilityLog} ready={phase === 'ready' || capabilityLog.length > 0} />
           ) : phase === 'waiting' ? (
             <div className="flex h-full w-full items-center justify-center rounded-lg border border-bolt-light-5 bg-white text-sm text-bolt-light-7 shadow-md">
               发送需求后生成项目代码

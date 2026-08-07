@@ -204,7 +204,7 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
           aria-expanded={profileMenuOpen}
           aria-haspopup="menu"
           onClick={() => setProfileMenuOpen((open) => !open)}
-          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg border border-bolt-light-12/80 bg-white hover:bg-bolt-light-2 transition-colors duration-150"
+          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white hover:bg-bolt-light-2 transition-colors duration-150"
         >
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-bolt-blue to-bolt-purple flex items-center justify-center text-white text-xs font-semibold">
             JD
