@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, ChevronRight, Paperclip, Sparkles, ListChecks, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, Paperclip, Sparkles, X } from 'lucide-react';
 
 interface PromptBoxProps {
   onSubmit: (prompt: string) => void;
@@ -193,10 +193,6 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-bolt-blue-light text-bolt-blue text-[12px] font-semibold">
-              <ListChecks className="w-3.5 h-3.5" />
-              Plan Mode
-            </span>
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}

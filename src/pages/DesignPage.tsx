@@ -45,7 +45,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { ChatMessage, Project } from '@/types';
-import { EditableBlock, PreviewChrome, previewBlockLabel } from '@/components/PreviewEdit';
+import { EditableBlock, PreviewChrome } from '@/components/PreviewEdit';
 import IntentSelector, { type IntentOption } from '@/components/IntentSelector';
 import UserChatBubble from '@/components/UserChatBubble';
 
@@ -1374,9 +1374,9 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   });
   const [selectorDone, setSelectorDone] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
-  const [layoutMode, setLayoutMode] = useState<'focus' | 'three-column'>('focus');
+  const [layoutMode] = useState<'focus' | 'three-column'>('focus');
   const [isRestoring, setIsRestoring] = useState(Boolean(project && !initialPrompt && project.kind !== 'chat'));
-  const [showPlanPanel, setShowPlanPanel] = useState(true);
+  const [showPlanPanel] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
@@ -1660,27 +1660,32 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   };
 
   const submitPreviewComment = () => {
-    const label = previewBlockLabel(selectedPreviewBlock);
     const note = previewComment.trim();
-    if (!label || !note || isRefining || phase !== 'ready') return;
-    const content = `【预览留言 · ${label}】${note}`;
-    setMessages((prev) => [...prev, {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString(),
-    }]);
+    if (!note || !selectedPreviewBlock || isRefining || phase !== 'ready') return;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        role: 'user',
+        content: note,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
     setPreviewComment('');
     clearReplyTimer();
     setIsRefining(true);
     replyTimerRef.current = window.setTimeout(() => {
       replyTimerRef.current = null;
-      setMessages((prev) => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `已收到对「${label}」的修改建议。Demo 中会保留原数据口径，并按你的留言调整该组件展示。`,
-        timestamp: new Date().toISOString(),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-assistant`,
+          role: 'assistant',
+          content: `已收到你的修改需求。Demo 中会按「${note}」调整预览展示。`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
       setIsRefining(false);
     }, 1200);
   };
@@ -1812,18 +1817,14 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
         )}
       </aside>
 
-      <section className={`shrink-0 border-r border-bolt-light-5 bg-bolt-light-2 flex flex-col transition-[width] duration-200 ${layoutMode === 'focus' ? 'w-[520px]' : 'w-[410px]'}`}>
+      <section className="shrink-0 border-r border-bolt-light-5 bg-bolt-light-2 flex flex-col w-[520px]">
         <div className="h-14 flex items-center px-4 border-b border-bolt-light-5 gap-2">
-          {layoutMode === 'focus' ? (
-            <button onClick={onBack} aria-label="返回项目列表" className="p-1.5 rounded-lg text-bolt-light-9 hover:bg-bolt-light-4">
-              <ArrowLeft className="w-[18px] h-[18px]" />
-            </button>
-          ) : (
-            <button onClick={() => setShowPlanPanel(!showPlanPanel)} aria-label="展开或收起执行计划" className="p-1.5 rounded-lg text-bolt-light-9 hover:bg-bolt-light-4">
-              <PanelLeft className="w-[18px] h-[18px]" />
-            </button>
-          )}
-          <span className="text-[14px] font-semibold text-bolt-light-12">Plan Mode</span>
+          <button onClick={onBack} aria-label="返回项目列表" className="p-1.5 rounded-lg text-bolt-light-9 hover:bg-bolt-light-4">
+            <ArrowLeft className="w-[18px] h-[18px]" />
+          </button>
+          <span className="text-[14px] font-semibold text-bolt-light-12 truncate">
+            {project?.name || '新建对话'}
+          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -2191,7 +2192,6 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                       setPreviewComment('');
                     }
                   }}
-                  selectedLabel={previewBlockLabel(selectedPreviewBlock)}
                   comment={previewComment}
                   onCommentChange={setPreviewComment}
                   onSubmitComment={submitPreviewComment}
@@ -2215,27 +2215,6 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           )}
         </div>
       </main>
-
-      <div data-testid="layout-mode-switch" className="fixed bottom-4 right-4 z-50 flex items-center gap-1 rounded-xl border border-bolt-light-5 bg-white/95 p-1 shadow-lg backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={() => setLayoutMode('focus')}
-          aria-pressed={layoutMode === 'focus'}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-medium transition-colors ${layoutMode === 'focus' ? 'bg-bolt-blue text-white' : 'text-bolt-light-8 hover:bg-bolt-light-3'}`}
-        >
-          <ListChecks className="w-3.5 h-3.5" />
-          专注模式
-        </button>
-        <button
-          type="button"
-          onClick={() => setLayoutMode('three-column')}
-          aria-pressed={layoutMode === 'three-column'}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-medium transition-colors ${layoutMode === 'three-column' ? 'bg-bolt-blue text-white' : 'text-bolt-light-8 hover:bg-bolt-light-3'}`}
-        >
-          <PanelLeft className="w-3.5 h-3.5" />
-          三栏模式
-        </button>
-      </div>
 
       {publishSuccessOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4" onClick={() => setPublishSuccessOpen(false)}>
