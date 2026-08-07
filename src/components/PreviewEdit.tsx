@@ -74,8 +74,11 @@ export function EditableBlock({
   }
 
   const selected = selectedId === id;
+  const surfaceClass = className.replace(/\boverflow-hidden\b/g, '').replace(/\s+/g, ' ').trim();
+  const needsClip = /\boverflow-hidden\b/.test(className);
+
   return (
-    <div className={`relative ${selected ? 'z-30 pb-[56px]' : 'z-0'}`}>
+    <div className={`relative pt-2.5 ${selected ? 'z-30 pb-[56px]' : 'z-0'}`}>
       <div
         role="button"
         tabIndex={0}
@@ -90,12 +93,14 @@ export function EditableBlock({
             onSelect(id);
           }
         }}
-        className={`relative cursor-pointer rounded-xl transition-shadow ${selected ? 'ring-2 ring-bolt-blue shadow-[0_0_0_4px_rgba(19,128,253,0.12)]' : 'hover:ring-2 hover:ring-dashed hover:ring-bolt-blue/50'} ${className}`}
+        className={`relative cursor-pointer rounded-xl transition-shadow ${selected ? 'ring-2 ring-bolt-blue shadow-[0_0_0_4px_rgba(19,128,253,0.12)]' : 'hover:ring-2 hover:ring-dashed hover:ring-bolt-blue/50'} ${surfaceClass}`}
       >
-        <span className={`absolute -top-2 left-2 z-20 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white ${selected ? 'bg-bolt-blue' : 'bg-bolt-blue/70'}`}>
+        <span className={`absolute left-2 top-0 z-20 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white ${selected ? 'bg-bolt-blue' : 'bg-bolt-blue/70'}`}>
           {tag}
         </span>
-        {children}
+        <div className={needsClip ? 'overflow-hidden rounded-xl' : undefined}>
+          {children}
+        </div>
       </div>
       {selected && (
         <div className="pointer-events-none absolute inset-x-0 top-full z-40 mt-2">
