@@ -3,7 +3,66 @@ import FrontPage from '@/pages/FrontPage';
 import DesignPage from '@/pages/DesignPage';
 import type { Page, Project, SidebarView } from '@/types';
 
+const familyFinanceChatSeed: Project = {
+  id: 'c1',
+  kind: 'chat',
+  resetKindOnReload: 'chat',
+  name: '想做个家庭理财小工具',
+  description: '还在聊需求：希望做一个能看收支和目标进度的小工具',
+  starred: false,
+  lastViewed: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+};
+
+const morningBriefChatSeed: Project = {
+  id: 'c2',
+  kind: 'chat',
+  resetKindOnReload: 'chat',
+  name: '市场早报要不要做成网页？',
+  description: '还在讨论早报内容结构，尚未开始构建',
+  starred: false,
+  lastViewed: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+};
+
+/** 每次刷新：把可演示聊天项恢复为聊天，方便反复给 mentor 演示升级效果 */
+function restoreDemoChatsOnReload(list: Project[]): Project[] {
+  return list.map((item) => {
+    if (item.id === 'c1') {
+      return {
+        ...familyFinanceChatSeed,
+        starred: item.starred,
+        lastViewed: item.lastViewed,
+      };
+    }
+
+    const isMorningBriefDemo =
+      item.id === 'c2' ||
+      item.description?.includes('还在讨论早报') ||
+      item.name === '市场早报要不要做成网页？';
+
+    if (isMorningBriefDemo) {
+      return {
+        ...morningBriefChatSeed,
+        starred: item.starred,
+        lastViewed: item.lastViewed,
+      };
+    }
+
+    if (item.resetKindOnReload === 'chat') {
+      return {
+        ...item,
+        kind: 'chat',
+        resetKindOnReload: 'chat',
+      };
+    }
+
+    return item;
+  });
+}
+
 const initialProjects: Project[] = [
+  familyFinanceChatSeed,
   {
     id: '1',
     kind: 'project',
@@ -22,6 +81,7 @@ const initialProjects: Project[] = [
     lastViewed: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
   },
+  morningBriefChatSeed,
   {
     id: '3',
     kind: 'project',
@@ -67,24 +127,28 @@ function App() {
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>(() => {
     try {
-      const savedProjects = window.localStorage.getItem('yingmi-lab-projects');
-      return savedProjects ? JSON.parse(savedProjects) : initialProjects;
+      const savedProjects = window.localStorage.getItem('yingmi-lab-projects-v2');
+      if (!savedProjects) return initialProjects;
+      return restoreDemoChatsOnReload(JSON.parse(savedProjects) as Project[]);
     } catch {
       return initialProjects;
     }
   });
 
   useEffect(() => {
-    window.localStorage.setItem('yingmi-lab-projects', JSON.stringify(projects));
+    window.localStorage.setItem('yingmi-lab-projects-v2', JSON.stringify(projects));
   }, [projects]);
 
-  const createProject = (prompt: string) => {
+  const createItem = (prompt: string, kind: 'chat' | 'project' = 'chat') => {
+    const trimmed = prompt.trim();
     const newProject: Project = {
       id: Date.now().toString(),
-      kind: 'project',
-      name: prompt.slice(0, 40) + (prompt.length > 40 ? '...' : ''),
-      description: prompt,
+      kind,
+      resetKindOnReload: kind === 'chat' ? 'chat' : undefined,
+      name: trimmed.slice(0, 40) + (trimmed.length > 40 ? '...' : ''),
+      description: trimmed,
       starred: false,
+      lastViewed: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
     setProjects((prev) => [newProject, ...prev]);
@@ -95,7 +159,9 @@ function App() {
   const handleOpenProject = (id: string) => {
     const project = projects.find((p) => p.id === id);
     if (project) {
-      setActiveProject(project);
+      const opened = { ...project, lastViewed: new Date().toISOString() };
+      setProjects((prev) => prev.map((item) => (item.id === id ? opened : item)));
+      setActiveProject(opened);
       setInitialPrompt(null);
       setCurrentPage('design');
     }
@@ -103,7 +169,8 @@ function App() {
 
   const handleNewProject = (prompt: string) => {
     if (prompt.trim()) {
-      createProject(prompt.trim());
+      // 先以聊天进入，再由 AI 澄清后升级为项目
+      createItem(prompt.trim(), 'chat');
       setInitialPrompt(prompt.trim());
     } else {
       setActiveProject(null);
@@ -113,9 +180,41 @@ function App() {
   };
 
   const handleCreateProjectFromDraft = (prompt: string) => {
-    const project = createProject(prompt);
+    const project = createItem(prompt, 'chat');
     setInitialPrompt(prompt);
     return project;
+  };
+
+  const handlePromoteToProject = (id: string, prompt: string) => {
+    const trimmed = prompt.trim();
+    setProjects((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              kind: 'project',
+              // 保留 resetKindOnReload，刷新后仍回到聊天，方便反复演示
+              resetKindOnReload: item.resetKindOnReload ?? (item.kind === 'chat' ? 'chat' : undefined),
+              name: trimmed.slice(0, 40) + (trimmed.length > 40 ? '...' : ''),
+              description: trimmed,
+              lastViewed: new Date().toISOString(),
+            }
+          : item
+      )
+    );
+    setActiveProject((prev) =>
+      prev && prev.id === id
+        ? {
+            ...prev,
+            kind: 'project',
+            resetKindOnReload: prev.resetKindOnReload ?? (prev.kind === 'chat' ? 'chat' : undefined),
+            name: trimmed.slice(0, 40) + (trimmed.length > 40 ? '...' : ''),
+            description: trimmed,
+            lastViewed: new Date().toISOString(),
+          }
+        : prev
+    );
+    setInitialPrompt(trimmed);
   };
 
   const handleToggleStar = (id: string) => {
@@ -152,6 +251,7 @@ function App() {
         project={activeProject}
         initialPrompt={initialPrompt}
         onCreateProject={handleCreateProjectFromDraft}
+        onPromoteToProject={handlePromoteToProject}
         onBack={handleBack}
       />
     );

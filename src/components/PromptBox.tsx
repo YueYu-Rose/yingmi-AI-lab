@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Paperclip, Sparkles, ListChecks } from 'lucide-react';
+import { ArrowUp, ChevronRight, Paperclip, Sparkles, ListChecks, X } from 'lucide-react';
 
 interface PromptBoxProps {
   onSubmit: (prompt: string) => void;
@@ -16,7 +16,13 @@ const suggestions = [
 export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps) {
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+
+  const canOptimize = value.trim().length > 0;
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -25,15 +31,58 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
     }
   }, [value]);
 
+  useEffect(() => {
+    if (!attachOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setAttachOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [attachOpen]);
+
   const handleSubmit = () => {
     if (!value.trim()) return;
     onSubmit(value.trim());
     setValue('');
+    setAttachments([]);
   };
 
   const handleOptimize = () => {
-    setValue((current) => current.trim() || '创建一个基金对比研究 Dashboard，对比三只基金近三年的收益、最大回撤、波动率、基金经理和主要持仓，并生成可视化图表与研究摘要。');
+    if (!canOptimize) return;
+    setValue((current) => {
+      const text = current.trim();
+      if (!text) return current;
+      if (text.includes('对比') || text.includes('Dashboard')) {
+        return '创建一个基金对比研究 Dashboard，对比三只基金近三年的收益、最大回撤、波动率、基金经理和主要持仓，并生成可视化图表与研究摘要。';
+      }
+      if (text.includes('组合') || text.includes('诊断')) {
+        return '做一个基金组合健康诊断工具，识别持仓基金，评估资产配置、相关性与风险，并生成可视化诊断页面。';
+      }
+      return `${text}。请补充清晰的目标用户、核心功能、需要展示的关键指标，以及期望的页面结构。`;
+    });
     requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const openFilePicker = () => {
+    setAttachOpen(false);
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+    setAttachments((prev) => {
+      const merged = [...prev];
+      for (const file of files) {
+        if (!merged.some((item) => item.name === file.name && item.size === file.size)) {
+          merged.push(file);
+        }
+      }
+      return merged;
+    });
+    event.target.value = '';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -77,12 +126,67 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
           }`}
         />
 
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 pb-2">
+            {attachments.map((file) => (
+              <span
+                key={`${file.name}-${file.size}`}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-bolt-light-3 px-2.5 py-1 text-[12px] text-bolt-light-10"
+              >
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="truncate">{file.name}</span>
+                <button
+                  type="button"
+                  aria-label={`移除 ${file.name}`}
+                  onClick={() => setAttachments((prev) => prev.filter((item) => item !== file))}
+                  className="rounded p-0.5 text-bolt-light-7 hover:bg-bolt-light-4 hover:text-bolt-light-11"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-0.5">
-            <button disabled className="p-2 rounded-lg text-bolt-light-7 cursor-not-allowed" title="Demo 中暂未开放附件">
-              <Paperclip className="w-[18px] h-[18px]" />
-            </button>
-            <button onClick={handleOptimize} className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11 transition-colors duration-150 text-[13px] font-medium">
+            <div className="relative" ref={attachMenuRef}>
+              <button
+                type="button"
+                onClick={() => setAttachOpen((open) => !open)}
+                aria-label="添加附件"
+                aria-expanded={attachOpen}
+                className="rounded-lg p-2 text-bolt-light-8 transition-colors duration-150 hover:bg-bolt-light-3 hover:text-bolt-light-11"
+              >
+                <Paperclip className="w-[18px] h-[18px]" />
+              </button>
+
+              {attachOpen && (
+                <div className="absolute bottom-[calc(100%+8px)] left-0 z-30 w-[220px] overflow-hidden rounded-xl border border-bolt-light-5 bg-white py-1 shadow-xl animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-bolt-light-11 hover:bg-bolt-light-2"
+                  >
+                    <Paperclip className="h-4 w-4 text-bolt-light-8" />
+                    <span className="flex-1">添加文件</span>
+                    <ChevronRight className="h-4 w-4 text-bolt-light-6" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOptimize}
+              disabled={!canOptimize}
+              aria-disabled={!canOptimize}
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150 ${
+                canOptimize
+                  ? 'text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-11'
+                  : 'cursor-not-allowed text-bolt-light-6'
+              }`}
+            >
               <Sparkles className="w-[15px] h-[15px]" />
               优化
             </button>
@@ -106,6 +210,14 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
             </button>
           </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFilesSelected}
+        />
       </div>
 
       {!compact && (

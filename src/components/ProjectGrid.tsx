@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Star, MoreHorizontal, FolderKanban, Clock, Users, LifeBuoy, Sparkles, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { Star, MoreHorizontal, FolderKanban, Clock, Users, LifeBuoy, Sparkles, Pencil, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
 import type { SidebarView, Project } from '@/types';
 
 interface ProjectGridProps {
@@ -14,7 +14,7 @@ interface ProjectGridProps {
 function getViewConfig(view: SidebarView): { title: string; subtitle: string; icon: typeof FolderKanban } {
   switch (view) {
     case 'workspace':
-      return { title: '工作空间', subtitle: '集中管理你创建的所有项目', icon: FolderKanban };
+      return { title: '工作空间', subtitle: '集中管理你的聊天与项目', icon: FolderKanban };
     case 'starred':
       return { title: '已加星标', subtitle: '你收藏的项目', icon: Star };
     case 'recent':
@@ -42,6 +42,7 @@ function getRelativeTime(dateStr: string): string {
 export default function ProjectGrid({ view, projects, onOpenProject, onToggleStar, onRenameProject, onDeleteProject }: ProjectGridProps) {
   const config = getViewConfig(view);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpenId(null);
+        setMenuPos(null);
       }
     }
     if (menuOpenId) {
@@ -59,10 +61,31 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
     }
   }, [menuOpenId]);
 
+  const openMenu = (projectId: string, anchor: HTMLElement) => {
+    if (menuOpenId === projectId) {
+      setMenuOpenId(null);
+      setMenuPos(null);
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = 176;
+    const menuHeight = 180;
+    const left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8);
+    const openUp = rect.bottom + menuHeight > window.innerHeight - 8;
+    const top = openUp ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4;
+    setMenuPos({ top, left: Math.max(8, left) });
+    setMenuOpenId(projectId);
+  };
+
+  const closeMenu = () => {
+    setMenuOpenId(null);
+    setMenuPos(null);
+  };
+
   const startRename = (project: Project) => {
     setRenamingId(project.id);
     setRenameValue(project.name);
-    setMenuOpenId(null);
+    closeMenu();
   };
 
   const confirmRename = () => {
@@ -136,7 +159,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
 
   return (
     <div className="max-w-5xl mx-auto p-8 animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-bolt-blue-light flex items-center justify-center">
             <config.icon className="w-5 h-5 text-bolt-blue" />
@@ -146,30 +169,48 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
             <p className="text-bolt-light-8 text-sm">{config.subtitle}</p>
           </div>
         </div>
-        <span className="text-[13px] text-bolt-light-7">{projects.length} 个项目</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map((project) => (
           <div
             key={project.id}
-            onClick={() => menuOpenId !== project.id && deleteConfirmId !== project.id && onOpenProject(project.id)}
-            className="group rounded-xl border border-bolt-light-5 bg-white overflow-hidden cursor-pointer bolt-card-hover relative"
+            onClick={() =>
+              renamingId !== project.id &&
+              menuOpenId !== project.id &&
+              deleteConfirmId !== project.id &&
+              onOpenProject(project.id)
+            }
+            className="group relative rounded-xl border border-bolt-light-5 bg-white cursor-pointer bolt-card-hover"
           >
             {/* Thumbnail */}
-            <div className="aspect-video bg-gradient-to-br from-bolt-light-3 to-bolt-light-5 relative overflow-hidden">
+            <div className="aspect-video bg-gradient-to-br from-bolt-light-3 to-bolt-light-5 relative overflow-hidden rounded-t-xl">
               <div className="absolute inset-0 bolt-grid-bg" />
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-12 h-12 rounded-xl bg-white/80 flex items-center justify-center shadow-sm">
-                  <FolderKanban className="w-6 h-6 text-bolt-light-8" />
+                  {project.kind === 'chat'
+                    ? <MessageCircle className="w-6 h-6 text-bolt-purple" />
+                    : <FolderKanban className="w-6 h-6 text-bolt-light-8" />}
                 </div>
               </div>
-              {project.sharedBy && (
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 text-[11px] font-medium text-bolt-light-9 flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  共享
-                </div>
-              )}
+              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 text-[11px] font-medium text-bolt-light-9 flex items-center gap-1">
+                {project.sharedBy ? (
+                  <>
+                    <Users className="w-3 h-3" />
+                    共享
+                  </>
+                ) : project.kind === 'chat' ? (
+                  <>
+                    <MessageCircle className="w-3 h-3" />
+                    聊天
+                  </>
+                ) : (
+                  <>
+                    <FolderKanban className="w-3 h-3" />
+                    项目
+                  </>
+                )}
+              </div>
               {project.starred && (
                 <div className="absolute top-2 right-2 p-1.5 rounded-md bg-white/90">
                   <Star className="w-4 h-4 fill-bolt-yellow text-bolt-yellow" />
@@ -192,55 +233,29 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
                     className="flex-1 text-[14px] font-semibold text-bolt-light-12 bg-bolt-light-2 border border-bolt-blue rounded-md px-2 py-0.5 outline-none"
                   />
                 ) : (
-                  <h3 className="text-[14px] font-semibold text-bolt-light-12 truncate flex-1">{project.name}</h3>
+                  <h3
+                    className="text-[14px] font-semibold text-bolt-light-12 truncate flex-1"
+                    title="双击重命名"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      startRename(project);
+                    }}
+                  >
+                    {project.name}
+                  </h3>
                 )}
-                <div className="relative" ref={menuOpenId === project.id ? menuRef : undefined}>
+                <div className="relative shrink-0">
                   <button
+                    type="button"
+                    aria-label="更多操作"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMenuOpenId(menuOpenId === project.id ? null : project.id);
+                      openMenu(project.id, e.currentTarget);
                     }}
                     className="p-1 rounded-md text-bolt-light-7 hover:bg-bolt-light-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                   >
                     <MoreHorizontal className="w-4 h-4" />
                   </button>
-
-                  {menuOpenId === project.id && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-bolt-light-5 bg-white shadow-lg py-1 animate-fade-in"
-                    >
-                      <button
-                        onClick={() => { onOpenProject(project.id); setMenuOpenId(null); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
-                      >
-                        <ExternalLink className="w-4 h-4 text-bolt-light-7" />
-                        打开
-                      </button>
-                      <button
-                        onClick={() => startRename(project)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
-                      >
-                        <Pencil className="w-4 h-4 text-bolt-light-7" />
-                        重命名
-                      </button>
-                      <button
-                        onClick={() => { onToggleStar(project.id); setMenuOpenId(null); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
-                      >
-                        <Star className={`w-4 h-4 text-bolt-light-7 ${project.starred ? 'fill-bolt-yellow text-bolt-yellow' : ''}`} />
-                        {project.starred ? '取消星标' : '加星标'}
-                      </button>
-                      <div className="h-px bg-bolt-light-4 my-1" />
-                      <button
-                        onClick={() => { setDeleteConfirmId(project.id); setMenuOpenId(null); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-red hover:bg-red-50 transition-colors duration-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        删除
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
               <p className="text-[12.5px] text-bolt-light-8 mt-0.5 line-clamp-1">{project.description}</p>
@@ -257,23 +272,27 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
             {deleteConfirmId === project.id && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center p-6 text-center animate-fade-in z-30"
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-xl bg-white/95 p-6 text-center animate-fade-in"
               >
                 <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-3">
                   <Trash2 className="w-6 h-6 text-bolt-red" />
                 </div>
-                <h4 className="text-[15px] font-semibold text-bolt-light-12 mb-1">确定删除此项目？</h4>
+                <h4 className="text-[15px] font-semibold text-bolt-light-12 mb-1">
+                  确定删除此{project.kind === 'chat' ? '聊天' : '项目'}？
+                </h4>
                 <p className="text-[12.5px] text-bolt-light-8 mb-4 max-w-[200px]">
                   此操作无法撤销。「{project.name}」将被永久删除。
                 </p>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}
                     className="px-3 py-1.5 rounded-lg border border-bolt-light-5 text-[13px] font-medium text-bolt-light-9 hover:bg-bolt-light-3 transition-colors duration-150"
                   >
                     取消
                   </button>
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); setDeleteConfirmId(null); }}
                     className="px-3 py-1.5 rounded-lg bg-bolt-red text-white text-[13px] font-medium hover:bg-red-600 transition-colors duration-150"
                   >
@@ -285,6 +304,53 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
           </div>
         ))}
       </div>
+
+      {menuOpenId && menuPos && (() => {
+        const project = projects.find((item) => item.id === menuOpenId);
+        if (!project) return null;
+        return (
+          <div
+            ref={menuRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{ top: menuPos.top, left: menuPos.left }}
+            className="fixed z-[80] w-44 rounded-xl border border-bolt-light-5 bg-white py-1 shadow-xl animate-fade-in"
+          >
+            <button
+              type="button"
+              onClick={() => { onOpenProject(project.id); closeMenu(); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
+            >
+              <ExternalLink className="w-4 h-4 text-bolt-light-7" />
+              打开
+            </button>
+            <button
+              type="button"
+              onClick={() => startRename(project)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
+            >
+              <Pencil className="w-4 h-4 text-bolt-light-7" />
+              重命名
+            </button>
+            <button
+              type="button"
+              onClick={() => { onToggleStar(project.id); closeMenu(); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-light-11 hover:bg-bolt-light-3 transition-colors duration-100"
+            >
+              <Star className={`w-4 h-4 text-bolt-light-7 ${project.starred ? 'fill-bolt-yellow text-bolt-yellow' : ''}`} />
+              {project.starred ? '取消星标' : '加星标'}
+            </button>
+            <div className="h-px bg-bolt-light-4 my-1" />
+            <button
+              type="button"
+              onClick={() => { setDeleteConfirmId(project.id); closeMenu(); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-bolt-red hover:bg-red-50 transition-colors duration-100"
+            >
+              <Trash2 className="w-4 h-4" />
+              删除
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -8,9 +8,12 @@ import {
   Sparkles,
   Wrench,
   MessageCircle,
+  UserSquare2,
+  LogOut,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SidebarView, Project } from '@/types';
+import ProfileHomeModal from '@/components/ProfileHomeModal';
 
 interface SidebarProps {
   activeView: SidebarView;
@@ -28,6 +31,41 @@ const navItems: { id: SidebarView; label: string; icon: typeof Home }[] = [
 export default function Sidebar({ activeView, onViewChange, onOpenProject, projects }: SidebarProps) {
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileHomeOpen, setProfileHomeOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [displayName, setDisplayName] = useState('张伟');
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const searchAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [profileMenuOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (searchAreaRef.current && !searchAreaRef.current.contains(event.target as Node)) {
+        setSearch('');
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!loggingOut) return;
+    const timer = window.setTimeout(() => setLoggingOut(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [loggingOut]);
 
   const personalProjects = projects.filter((p) => !p.sharedBy);
   const filteredPersonal = search.trim()
@@ -71,7 +109,11 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
         })}
 
         {/* Recent chats and projects */}
-        <div data-testid="workspace-recent-header" className="mt-5 mb-1 px-2 min-h-7 flex items-center gap-2">
+        <div
+          ref={searchAreaRef}
+          data-testid="workspace-recent-header"
+          className="mt-5 mb-1 px-2 min-h-7 flex items-center gap-2"
+        >
           <span className="shrink-0 text-[11px] font-medium text-bolt-light-7 tracking-wider">
             最近
           </span>
@@ -156,18 +198,72 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
       </nav>
 
       {/* User profile */}
-      <div className="p-3 border-t border-bolt-light-5">
-        <button className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-bolt-light-3 transition-colors duration-150">
+      <div className="relative p-3 border-t border-bolt-light-5" ref={profileMenuRef}>
+        <button
+          type="button"
+          aria-expanded={profileMenuOpen}
+          aria-haspopup="menu"
+          onClick={() => setProfileMenuOpen((open) => !open)}
+          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg border border-bolt-light-12/80 bg-white hover:bg-bolt-light-2 transition-colors duration-150"
+        >
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-bolt-blue to-bolt-purple flex items-center justify-center text-white text-xs font-semibold">
             JD
           </div>
           <div className="flex-1 text-left min-w-0">
-            <div className="text-[13px] font-medium text-bolt-light-12 truncate">张伟</div>
+            <div className="text-[13px] font-medium text-bolt-light-12 truncate">{displayName}</div>
             <div className="text-[11px] text-bolt-light-7 truncate">免费版</div>
           </div>
-          <ChevronDown className="w-4 h-4 text-bolt-light-7" />
+          <ChevronDown className={`w-4 h-4 text-bolt-light-7 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
         </button>
+
+        {profileMenuOpen && (
+          <div
+            role="menu"
+            className="absolute bottom-[calc(100%-4px)] left-3 right-3 z-40 overflow-hidden rounded-xl border border-bolt-light-5 bg-white shadow-xl animate-fade-in"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProfileMenuOpen(false);
+                setProfileHomeOpen(true);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-[13.5px] text-bolt-light-10 hover:bg-bolt-light-2"
+            >
+              <UserSquare2 className="h-[18px] w-[18px] shrink-0 text-bolt-light-9" />
+              个人主页
+            </button>
+            <div className="mx-3 border-t border-bolt-light-4" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProfileMenuOpen(false);
+                setLoggingOut(true);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-[13.5px] text-bolt-light-10 hover:bg-bolt-light-2"
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0 text-bolt-light-9" />
+              退出
+            </button>
+          </div>
+        )}
       </div>
+
+      <ProfileHomeModal
+        open={profileHomeOpen}
+        displayName={displayName}
+        onDisplayNameChange={setDisplayName}
+        onClose={() => setProfileHomeOpen(false)}
+      />
+
+      {loggingOut && (
+        <div className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center">
+          <div className="rounded-2xl bg-white px-8 py-5 text-center shadow-2xl animate-fade-in">
+            <p className="text-[15px] font-semibold text-bolt-light-11">正在退出...</p>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -8,23 +8,31 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Circle,
   Code2,
+  Copy,
   Database,
+  Download,
   Eye,
+  FileText,
+  Folder,
+  FolderOpen,
   Globe,
   ListChecks,
   Loader2,
+  MessageCircle,
   Monitor,
   PanelLeft,
   Paperclip,
   RefreshCw,
+  Search,
   Share2,
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Tablet,
+  X,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -37,17 +45,44 @@ import {
   YAxis,
 } from 'recharts';
 import type { ChatMessage, Project } from '@/types';
+import { EditableBlock, PreviewChrome, previewBlockLabel } from '@/components/PreviewEdit';
+import IntentSelector, { type IntentOption } from '@/components/IntentSelector';
+import UserChatBubble from '@/components/UserChatBubble';
 
 interface DesignPageProps {
   project: Project | null;
   initialPrompt: string | null;
   onCreateProject: (prompt: string) => Project;
+  onPromoteToProject: (id: string, prompt: string) => void;
   onBack: () => void;
 }
 
 type ViewMode = 'preview' | 'code';
-type DeviceMode = 'desktop' | 'tablet' | 'mobile';
-type BuildPhase = 'waiting' | 'thinking' | 'planning' | 'building' | 'ready';
+type DeviceMode = 'desktop' | 'mobile';
+type BuildPhase = 'waiting' | 'clarifying' | 'thinking' | 'planning' | 'building' | 'ready';
+
+const INTENT_OPTIONS: IntentOption[] = [
+  {
+    id: 'build-app',
+    title: '直接做成可预览的金融应用',
+    description: '按你的需求生成页面，并展示盈米 MCP / Skills 的执行过程。',
+  },
+  {
+    id: 'fund-compare',
+    title: '做基金对比研究 Dashboard',
+    description: '对比收益、回撤、波动率与持仓，输出研究摘要页面。',
+  },
+  {
+    id: 'portfolio',
+    title: '做组合健康诊断',
+    description: '分析资产配置、相关性和风险，给出改善方向。',
+  },
+  {
+    id: 'explore',
+    title: '先继续聊清楚需求',
+    description: '先不急着构建，帮你把目标、用户和使用场景聊清楚。',
+  },
+];
 
 interface ExecutionStep {
   name: string;
@@ -65,7 +100,6 @@ interface PreviewConfig {
 
 interface ScenarioConfig {
   key: 'comparison' | 'portfolio' | 'morning' | 'wealth' | 'screener' | 'allocation';
-  badge: string;
   title: string;
   planDescription: string;
   completion: string;
@@ -76,7 +110,6 @@ interface ScenarioConfig {
 const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'comparison',
-    badge: '基金研究',
     title: '基金对比研究 Dashboard',
     planDescription: '先校验基金、获取业绩与净值，再生成分析和可视化页面。',
     completion: 'Dashboard 已生成。右侧预览展示了基金收益走势、风险指标和 fund-analyst 研究摘要。',
@@ -91,7 +124,6 @@ const SCENARIOS: ScenarioConfig[] = [
   },
   {
     key: 'portfolio',
-    badge: '组合诊断',
     title: '基金组合健康诊断',
     planDescription: '识别持仓基金，评估资产配置、相关性与历史风险，生成组合诊断页面。',
     completion: '组合诊断已完成。右侧展示健康度、资产分布、相关性风险和 portfolio-doctor 建议。',
@@ -113,7 +145,6 @@ const SCENARIOS: ScenarioConfig[] = [
   },
   {
     key: 'morning',
-    badge: '市场资讯',
     title: '市场早报网页',
     planDescription: '聚合财经资讯与基金经理观点，提取核心事件，生成结构化早报页面。',
     completion: '市场早报已生成。右侧展示核心数据、重要事件与 market-morning-brief 解读。',
@@ -133,7 +164,6 @@ const SCENARIOS: ScenarioConfig[] = [
   },
   {
     key: 'wealth',
-    badge: '财富规划',
     title: '家庭财富规划报告',
     planDescription: '整理家庭资产负债与收支，测算财富目标，生成结构化财富规划报告。',
     completion: '家庭财富规划已生成。右侧展示财务健康度、目标达成情况和 wealth-report 摘要。',
@@ -153,7 +183,6 @@ const SCENARIOS: ScenarioConfig[] = [
   },
   {
     key: 'screener',
-    badge: '基金分析',
     title: '基金筛选工具',
     planDescription: '根据绩效、风险和产品属性筛选候选基金，通过诊断信号排除问题产品。',
     completion: '基金筛选已完成。右侧展示筛选条件、候选结果和 fund-screener 排除原因。',
@@ -174,7 +203,6 @@ const SCENARIOS: ScenarioConfig[] = [
   },
   {
     key: 'allocation',
-    badge: '资产配置',
     title: '资产配置模拟器',
     planDescription: '明确财富目标与风险约束，测算目标缺口，生成资产配置模拟方案。',
     completion: '资产配置方案已生成。右侧展示目标配置、预期风险收益与 wealth-goalmatch 说明。',
@@ -339,9 +367,141 @@ function PlanCard({ phase, currentStep, scenario }: { phase: BuildPhase; current
   );
 }
 
-function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
+function ExecutionChain({
+  phase,
+  currentStep,
+  scenario,
+}: {
+  phase: BuildPhase;
+  currentStep: number;
+  scenario: ScenarioConfig;
+}) {
+  const [chainOpen, setChainOpen] = useState(phase === 'building');
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(() => new Set());
+
+  const visibleCount = phase === 'ready'
+    ? scenario.steps.length
+    : Math.min(Math.max(currentStep + 1, 0), scenario.steps.length);
+  const visibleSteps = scenario.steps.slice(0, visibleCount);
+  const mcpSteps = scenario.steps.filter((step) => step.type === 'MCP');
+  const skillSteps = scenario.steps.filter((step) => step.type === 'Skill');
+
+  useEffect(() => {
+    if (phase === 'building') setChainOpen(true);
+    if (phase === 'ready') setChainOpen(false);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'building' || currentStep < 0) return;
+    setExpandedSteps(new Set([Math.min(currentStep, scenario.steps.length - 1)]));
+  }, [phase, currentStep, scenario.steps.length]);
+
+  const toggleStep = (index: number) => {
+    setExpandedSteps((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  if (visibleSteps.length === 0) return null;
+
   return (
-    <div className="h-full overflow-y-auto bg-[#f6f8fb] text-bolt-light-12">
+    <div data-testid="execution-chain" className="animate-slide-up">
+      <button
+        type="button"
+        onClick={() => setChainOpen((open) => !open)}
+        aria-expanded={chainOpen}
+        className="w-full flex items-center justify-between gap-3 py-1.5 text-left text-bolt-light-7 hover:text-bolt-light-10 transition-colors"
+      >
+        <span className="min-w-0 flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-medium">
+          {phase === 'building' ? (
+            <Loader2 className="w-3.5 h-3.5 text-bolt-blue animate-spin" />
+          ) : (
+            <Check className="w-3.5 h-3.5 text-bolt-green" />
+          )}
+          <span>
+            {phase === 'building'
+              ? `正在执行计划 · ${visibleCount}/${scenario.steps.length} 步`
+              : `已完成思考与执行计划 · ${scenario.steps.length} 步`}
+          </span>
+          {phase === 'ready' && (
+            <span className="basis-full pl-[22px] text-[11px] font-normal leading-relaxed text-bolt-light-7">
+              {mcpSteps.length} 个 MCP：{mcpSteps.map((step) => step.name).join('、')} · {skillSteps.length} 个 Skills：{skillSteps.map((step) => step.name).join('、')}
+            </span>
+          )}
+        </span>
+        {chainOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+      </button>
+
+      {chainOpen && (
+        <div data-testid="execution-chain-content" className="space-y-4 pt-3 animate-fade-in">
+          {visibleSteps.map((step, index) => {
+            const expanded = expandedSteps.has(index);
+            const isActive = phase === 'building' && index === currentStep;
+            return (
+              <div key={step.name} className="px-1 animate-fade-in">
+                <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}</p>
+                <div className="rounded-xl border border-bolt-light-5 bg-white overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleStep(index)}
+                    aria-expanded={expanded}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-bolt-light-7 hover:text-bolt-light-9 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-[12px] font-medium">
+                      {isActive && <Loader2 className="w-3.5 h-3.5 text-bolt-blue animate-spin shrink-0" />}
+                      {isActive ? '盈米正在执行（调用1个工具）' : '盈米计划生成（调用1个工具）'}
+                    </span>
+                    {expanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+                  </button>
+
+                  {expanded && (
+                    <div className="px-3 pb-3 animate-fade-in">
+                      <div data-testid="tool-call-pill" className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-bolt-light-3 px-3 py-1.5 text-[11.5px] text-bolt-light-8">
+                        <img
+                          data-testid="tool-call-icon"
+                          src="/tool-call-link-icon.png"
+                          alt=""
+                          aria-hidden="true"
+                          className="w-4 h-4 shrink-0 object-contain mix-blend-multiply"
+                        />
+                        <span className="shrink-0">调用工具</span>
+                        <span className="text-bolt-light-6">|</span>
+                        <span className="truncate font-medium">{step.name}</span>
+                        {!isActive && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      </div>
+                      <p className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8">
+                        {step.type === 'MCP'
+                          ? '这一步会通过盈米 MCP 读取任务必需的金融数据，并在执行记录中保留数据来源。'
+                          : '这一步会使用盈米 Skill 对已获取的数据进行分析或页面生成，产出可预览的结果。'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComparisonPreview({
+  scenario,
+  editMode = false,
+  selectedId = null,
+  onSelect = () => undefined,
+}: {
+  scenario: ScenarioConfig;
+  editMode?: boolean;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+}) {
+  return (
+    <div className="h-full overflow-y-auto bg-[#f6f8fb] text-bolt-light-12" onClick={() => editMode && onSelect('')}>
       <div className="bg-white border-b border-bolt-light-5 px-6 py-4 flex items-center gap-4">
         <div className="w-10 h-10 rounded-xl bg-bolt-blue flex items-center justify-center shadow-sm">
           <BarChart3 className="w-5 h-5 text-white" />
@@ -364,16 +524,31 @@ function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
             ['最低最大回撤', '-3.9%', '红利低波A'],
             ['数据覆盖', '100%', '4 个 MCP 工具'],
           ].map(([label, value, hint]) => (
-            <div key={label} className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm">
+            <EditableBlock
+              key={label}
+              id={`metric:${label}`}
+              tag="CARD"
+              editMode={editMode}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm"
+            >
               <p className="text-[11px] text-bolt-light-8">{label}</p>
               <p className="text-xl font-bold mt-1">{value}</p>
               <p className="text-[10.5px] text-bolt-light-7 mt-1">{hint}</p>
-            </div>
+            </EditableBlock>
           ))}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-4">
-          <div className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm min-h-[310px]">
+          <EditableBlock
+            id="chart:performance"
+            tag="CHART"
+            editMode={editMode}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm min-h-[310px]"
+          >
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-[14px] font-semibold">累计收益走势</h3>
@@ -395,9 +570,16 @@ function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </EditableBlock>
 
-          <div className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm">
+          <EditableBlock
+            id="summary:analyst"
+            tag="DIV"
+            editMode={editMode}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm"
+          >
             <div className="flex items-center gap-2 mb-3">
               <Activity className="w-4 h-4 text-bolt-blue" />
               <h3 className="text-[14px] font-semibold">fund-analyst 摘要</h3>
@@ -413,10 +595,17 @@ function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
                 结论需结合更长周期、产品类型及用户风险偏好进一步验证。
               </p>
             </div>
-          </div>
+          </EditableBlock>
         </div>
 
-        <div className="rounded-xl bg-white border border-bolt-light-5 shadow-sm overflow-hidden">
+        <EditableBlock
+          id="table:funds"
+          tag="TABLE"
+          editMode={editMode}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          className="rounded-xl bg-white border border-bolt-light-5 shadow-sm overflow-hidden"
+        >
           <div className="px-4 py-3 border-b border-bolt-light-5 flex items-center justify-between">
             <h3 className="text-[14px] font-semibold">关键指标对比</h3>
             <span className="text-[10.5px] text-bolt-light-7">指标口径已对齐</span>
@@ -447,7 +636,7 @@ function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </EditableBlock>
 
         <div className="rounded-lg border border-bolt-light-5 bg-white px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 text-[10.5px] text-bolt-light-8">
           <span className="font-semibold text-bolt-light-10">本次使用记录</span>
@@ -460,10 +649,20 @@ function ComparisonPreview({ scenario }: { scenario: ScenarioConfig }) {
   );
 }
 
-function ScenarioPreview({ scenario }: { scenario: ScenarioConfig }) {
+function ScenarioPreview({
+  scenario,
+  editMode = false,
+  selectedId = null,
+  onSelect = () => undefined,
+}: {
+  scenario: ScenarioConfig;
+  editMode?: boolean;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+}) {
   const preview = scenario.preview!;
   return (
-    <div className="h-full overflow-y-auto bg-[#f6f8fb] text-bolt-light-12">
+    <div className="h-full overflow-y-auto bg-[#f6f8fb] text-bolt-light-12" onClick={() => editMode && onSelect('')}>
       <div className="bg-white border-b border-bolt-light-5 px-6 py-4 flex items-center gap-4">
         <div className="w-10 h-10 rounded-xl bg-bolt-blue flex items-center justify-center shadow-sm">
           <Activity className="w-5 h-5 text-white" />
@@ -481,16 +680,31 @@ function ScenarioPreview({ scenario }: { scenario: ScenarioConfig }) {
       <div className="p-5 space-y-4 max-w-6xl mx-auto">
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {preview.metrics.map(([label, value, hint]) => (
-            <div key={label} className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm">
+            <EditableBlock
+              key={label}
+              id={`metric:${label}`}
+              tag="CARD"
+              editMode={editMode}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm"
+            >
               <p className="text-[11px] text-bolt-light-8">{label}</p>
               <p className="text-xl font-bold mt-1">{value}</p>
               <p className="text-[10.5px] text-bolt-light-7 mt-1">{hint}</p>
-            </div>
+            </EditableBlock>
           ))}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1.7fr_1fr] gap-4">
-          <div className="rounded-xl bg-white border border-bolt-light-5 shadow-sm overflow-hidden">
+          <EditableBlock
+            id="table:section"
+            tag="TABLE"
+            editMode={editMode}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            className="rounded-xl bg-white border border-bolt-light-5 shadow-sm overflow-hidden"
+          >
             <div className="px-4 py-3 border-b border-bolt-light-5 flex items-center justify-between">
               <h3 className="text-[14px] font-semibold">{preview.sectionTitle}</h3>
               <span className="text-[10.5px] text-bolt-light-7">口径已对齐</span>
@@ -515,9 +729,16 @@ function ScenarioPreview({ scenario }: { scenario: ScenarioConfig }) {
                 </tbody>
               </table>
             </div>
-          </div>
+          </EditableBlock>
 
-          <div className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm">
+          <EditableBlock
+            id="summary:insights"
+            tag="DIV"
+            editMode={editMode}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            className="rounded-xl bg-white border border-bolt-light-5 p-4 shadow-sm"
+          >
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-bolt-blue" />
               <h3 className="text-[14px] font-semibold">{scenario.steps.find((step) => step.type === 'Skill')?.name} 摘要</h3>
@@ -530,7 +751,7 @@ function ScenarioPreview({ scenario }: { scenario: ScenarioConfig }) {
               ))}
               <p className="rounded-lg bg-bolt-light-3 p-3">本页为产品 Demo，所有名称与数据均为模拟内容。</p>
             </div>
-          </div>
+          </EditableBlock>
         </div>
 
         <div className="rounded-lg border border-bolt-light-5 bg-white px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 text-[10.5px] text-bolt-light-8">
@@ -544,8 +765,511 @@ function ScenarioPreview({ scenario }: { scenario: ScenarioConfig }) {
   );
 }
 
-function ProjectPreview({ scenario }: { scenario: ScenarioConfig }) {
-  return scenario.key === 'comparison' ? <ComparisonPreview scenario={scenario} /> : <ScenarioPreview scenario={scenario} />;
+function ProjectPreview({
+  scenario,
+  editMode = false,
+  selectedId = null,
+  onSelect = () => undefined,
+}: {
+  scenario: ScenarioConfig;
+  editMode?: boolean;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+}) {
+  const props = { scenario, editMode, selectedId, onSelect };
+  return scenario.key === 'comparison' ? <ComparisonPreview {...props} /> : <ScenarioPreview {...props} />;
+}
+
+interface CodeFile {
+  path: string;
+  language: 'ts' | 'tsx' | 'css' | 'json';
+  content: string;
+}
+
+function buildProjectFiles(scenario: ScenarioConfig): CodeFile[] {
+  const pageName = `${scenario.key[0].toUpperCase()}${scenario.key.slice(1)}Page`;
+  const mcpList = scenario.steps
+    .filter((step) => step.type === 'MCP')
+    .map((step) => `  '${step.name}'`)
+    .join(',\n');
+  const skillList = scenario.steps
+    .filter((step) => step.type === 'Skill')
+    .map((step) => `  '${step.name}'`)
+    .join(',\n');
+
+  return [
+    {
+      path: 'src/App.tsx',
+      language: 'tsx',
+      content: `import { ${pageName} } from '@/pages/${scenario.key}'
+import { YingmiProvider } from '@/contexts/YingmiContext'
+
+export default function App() {
+  return (
+    <YingmiProvider>
+      <${pageName} />
+    </YingmiProvider>
+  )
+}
+`,
+    },
+    {
+      path: 'src/main.tsx',
+      language: 'tsx',
+      content: `import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+`,
+    },
+    {
+      path: 'src/index.css',
+      language: 'css',
+      content: `:root {
+  --ym-blue: #1380fd;
+  --ym-bg: #f6f8fb;
+  --ym-text: #171717;
+}
+
+body {
+  margin: 0;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--ym-bg);
+  color: var(--ym-text);
+}
+`,
+    },
+    {
+      path: `src/pages/${scenario.key}.tsx`,
+      language: 'tsx',
+      content: `import { useFundWorkspace } from '@/hooks/useFundWorkspace'
+import { MetricCard } from '@/components/MetricCard'
+import { ResultTable } from '@/components/ResultTable'
+
+export function ${pageName}() {
+  const { loading, metrics, rows } = useFundWorkspace('${scenario.key}')
+
+  if (loading) return <div className="p-8">正在加载盈米数据…</div>
+
+  return (
+    <main className="mx-auto max-w-6xl space-y-6 p-6">
+      <header>
+        <h1 className="text-2xl font-bold">${scenario.title}</h1>
+        <p className="mt-1 text-sm text-slate-500">由盈米 MCP 与 Skills 生成</p>
+      </header>
+      <section className="grid gap-4 md:grid-cols-4">
+        {metrics.map((item) => (
+          <MetricCard key={item.label} {...item} />
+        ))}
+      </section>
+      <ResultTable rows={rows} />
+    </main>
+  )
+}
+`,
+    },
+    {
+      path: 'src/components/MetricCard.tsx',
+      language: 'tsx',
+      content: `interface MetricCardProps {
+  label: string
+  value: string
+  hint?: string
+}
+
+export function MetricCard({ label, value, hint }: MetricCardProps) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+    </div>
+  )
+}
+`,
+    },
+    {
+      path: 'src/components/ResultTable.tsx',
+      language: 'tsx',
+      content: `interface ResultTableProps {
+  rows: Array<Record<string, string>>
+}
+
+export function ResultTable({ rows }: ResultTableProps) {
+  if (rows.length === 0) return null
+  const headers = Object.keys(rows[0])
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-slate-50 text-slate-500">
+          <tr>
+            {headers.map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index} className="border-t border-slate-100">
+              {headers.map((header) => (
+                <td key={header} className="px-4 py-3 text-slate-700">{row[header]}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+`,
+    },
+    {
+      path: 'src/hooks/useFundWorkspace.ts',
+      language: 'ts',
+      content: `import { useEffect, useState } from 'react'
+import { runYingmiPlan } from '@/lib/yingmi'
+
+export function useFundWorkspace(scenario: string) {
+  const [loading, setLoading] = useState(true)
+  const [metrics, setMetrics] = useState<Array<{ label: string; value: string; hint?: string }>>([])
+  const [rows, setRows] = useState<Array<Record<string, string>>>([])
+
+  useEffect(() => {
+    let cancelled = false
+    runYingmiPlan(scenario).then((result) => {
+      if (cancelled) return
+      setMetrics(result.metrics)
+      setRows(result.rows)
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [scenario])
+
+  return { loading, metrics, rows }
+}
+`,
+    },
+    {
+      path: 'src/lib/yingmi.ts',
+      language: 'ts',
+      content: `const MCP_TOOLS = [
+${mcpList}
+] as const
+
+const SKILLS = [
+${skillList}
+] as const
+
+export async function runYingmiPlan(scenario: string) {
+  // Demo: 真实环境中会按顺序调用上方 MCP / Skills
+  console.info('[yingmi]', scenario, MCP_TOOLS, SKILLS)
+  return {
+    metrics: [
+      { label: '场景', value: '${scenario.title}', hint: 'Demo' },
+      { label: 'MCP', value: String(MCP_TOOLS.length), hint: '已编排' },
+      { label: 'Skills', value: String(SKILLS.length), hint: '已编排' },
+      { label: '状态', value: 'Ready', hint: '可预览' },
+    ],
+    rows: [
+      { 步骤: '理解需求', 状态: '完成' },
+      { 步骤: '调用能力', 状态: '完成' },
+      { 步骤: '生成页面', 状态: '完成' },
+    ],
+  }
+}
+`,
+    },
+    {
+      path: 'src/contexts/YingmiContext.tsx',
+      language: 'tsx',
+      content: `import { createContext, useContext, type ReactNode } from 'react'
+
+interface YingmiContextValue {
+  dataMode: 'demo' | 'live'
+  scenario: string
+}
+
+const YingmiContext = createContext<YingmiContextValue>({
+  dataMode: 'demo',
+  scenario: '${scenario.key}',
+})
+
+export function YingmiProvider({ children }: { children: ReactNode }) {
+  return (
+    <YingmiContext.Provider value={{ dataMode: 'demo', scenario: '${scenario.key}' }}>
+      {children}
+    </YingmiContext.Provider>
+  )
+}
+
+export function useYingmi() {
+  return useContext(YingmiContext)
+}
+`,
+    },
+    {
+      path: 'plan.config.ts',
+      language: 'ts',
+      content: `// Yingmi Lab · Plan Mode demo
+export const plan = {
+  scenario: '${scenario.key}',
+  title: '${scenario.title}',
+  mcpTools: [
+${mcpList}
+  ],
+  skills: [
+${skillList}
+  ],
+  output: '${scenario.title}',
+  dataMode: 'demo' as const,
+}
+`,
+    },
+    {
+      path: 'package.json',
+      language: 'json',
+      content: `{
+  "name": "yingmi-${scenario.key}",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
+`,
+    },
+  ];
+}
+
+type CodeTreeNode =
+  | { kind: 'dir'; name: string; path: string; children: CodeTreeNode[] }
+  | { kind: 'file'; name: string; path: string; language: CodeFile['language'] };
+
+function buildCodeTree(files: CodeFile[]): CodeTreeNode[] {
+  const root: CodeTreeNode[] = [];
+  const dirMap = new Map<string, CodeTreeNode & { kind: 'dir' }>();
+
+  const getOrCreateDir = (dirPath: string) => {
+    const existing = dirMap.get(dirPath);
+    if (existing) return existing;
+    const parts = dirPath.split('/');
+    const node: CodeTreeNode & { kind: 'dir' } = {
+      kind: 'dir',
+      name: parts[parts.length - 1],
+      path: dirPath,
+      children: [],
+    };
+    dirMap.set(dirPath, node);
+    if (parts.length === 1) root.push(node);
+    else getOrCreateDir(parts.slice(0, -1).join('/')).children.push(node);
+    return node;
+  };
+
+  for (const file of files) {
+    const parts = file.path.split('/');
+    const fileNode: CodeTreeNode = {
+      kind: 'file',
+      name: parts[parts.length - 1],
+      path: file.path,
+      language: file.language,
+    };
+    if (parts.length === 1) root.push(fileNode);
+    else getOrCreateDir(parts.slice(0, -1).join('/')).children.push(fileNode);
+  }
+
+  const sortNodes = (nodes: CodeTreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((node) => {
+      if (node.kind === 'dir') sortNodes(node.children);
+    });
+  };
+  sortNodes(root);
+  return root;
+}
+
+function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
+  const files = buildProjectFiles(scenario);
+  const [query, setQuery] = useState('');
+  const [activePath, setActivePath] = useState(files.find((file) => file.path.endsWith(`/${scenario.key}.tsx`))?.path ?? files[0]?.path ?? '');
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set(['src', 'src/components', 'src/hooks', 'src/pages', 'src/lib', 'src/contexts']));
+  const [copied, setCopied] = useState(false);
+
+  const filteredFiles = files.filter((file) =>
+    query.trim() === '' || file.path.toLowerCase().includes(query.trim().toLowerCase())
+  );
+  const tree = buildCodeTree(filteredFiles);
+  const activeFile = files.find((file) => file.path === activePath) ?? filteredFiles[0] ?? files[0];
+
+  useEffect(() => {
+    const preferred = files.find((file) => file.path.endsWith(`/${scenario.key}.tsx`))?.path ?? files[0]?.path ?? '';
+    setActivePath(preferred);
+  }, [scenario.key]);
+
+  const toggleDir = (dir: string) => {
+    setExpandedDirs((current) => {
+      const next = new Set(current);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
+  };
+
+  const copyCode = async () => {
+    if (!activeFile) return;
+    try {
+      await navigator.clipboard.writeText(activeFile.content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const downloadCode = () => {
+    if (!activeFile) return;
+    const blob = new Blob([activeFile.content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = activeFile.path.split('/').pop() ?? 'file.txt';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const langBadge = (language: CodeFile['language']) => {
+    if (language === 'tsx') return { label: 'TS', className: 'bg-sky-100 text-sky-700' };
+    if (language === 'ts') return { label: 'TS', className: 'bg-blue-100 text-blue-700' };
+    if (language === 'css') return { label: 'CSS', className: 'bg-violet-100 text-violet-700' };
+    return { label: 'JSON', className: 'bg-amber-100 text-amber-700' };
+  };
+
+  const renderTree = (nodes: CodeTreeNode[], depth = 0): ReactNode =>
+    nodes.map((node) => {
+      if (node.kind === 'dir') {
+        const open = expandedDirs.has(node.path) || query.trim() !== '';
+        return (
+          <div key={node.path}>
+            <button
+              type="button"
+              onClick={() => toggleDir(node.path)}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[12.5px] text-bolt-light-10 hover:bg-bolt-light-3"
+              style={{ paddingLeft: 8 + depth * 12 }}
+            >
+              {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-bolt-light-7" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-bolt-light-7" />}
+              {open ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-bolt-blue" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-bolt-blue" />}
+              <span className="truncate">{node.name}</span>
+            </button>
+            {open && renderTree(node.children, depth + 1)}
+          </div>
+        );
+      }
+
+      const active = activeFile?.path === node.path;
+      const badge = langBadge(node.language);
+      return (
+        <button
+          key={node.path}
+          type="button"
+          onClick={() => setActivePath(node.path)}
+          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[12.5px] ${active ? 'bg-bolt-blue-light text-bolt-blue' : 'text-bolt-light-10 hover:bg-bolt-light-3'}`}
+          style={{ paddingLeft: 8 + depth * 12 }}
+        >
+          <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 text-[8px] font-bold ${badge.className}`}>
+            {badge.label.slice(0, 3)}
+          </span>
+          <span className="truncate">{node.name}</span>
+        </button>
+      );
+    });
+
+  const lines = (activeFile?.content ?? '').replace(/\n$/, '').split('\n');
+  const activeBadge = activeFile ? langBadge(activeFile.language) : null;
+
+  return (
+    <div data-testid="code-workspace" className="flex h-full w-full overflow-hidden rounded-lg border border-bolt-light-5 bg-white shadow-md">
+      <aside className="flex w-[240px] shrink-0 flex-col border-r border-bolt-light-5 bg-bolt-light-2">
+        <div className="border-b border-bolt-light-5 px-3 py-3">
+          <p className="mb-2 text-[13px] font-semibold text-bolt-light-12">代码</p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-bolt-light-7" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索文件"
+              className="w-full rounded-lg border border-bolt-light-5 bg-white py-1.5 pl-8 pr-3 text-[12px] text-bolt-light-12 outline-none placeholder:text-bolt-light-7 focus:border-bolt-blue"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {filteredFiles.length === 0 ? (
+            <p className="px-2 py-4 text-[12px] text-bolt-light-7">没有匹配的文件</p>
+          ) : (
+            renderTree(tree)
+          )}
+        </div>
+      </aside>
+
+      <section className="flex min-w-0 flex-1 flex-col bg-white">
+        <div className="flex h-10 items-center gap-2 border-b border-bolt-light-5 px-2">
+          {activeFile && activeBadge && (
+            <div className="flex min-w-0 items-center gap-2 rounded-t-md border border-b-0 border-bolt-light-5 bg-white px-3 py-1.5">
+              <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 text-[8px] font-bold ${activeBadge.className}`}>
+                {activeBadge.label}
+              </span>
+              <span className="truncate text-[12px] text-bolt-light-11">{activeFile.path.split('/').pop()}</span>
+              <span className="text-bolt-light-6">
+                <X className="h-3 w-3" />
+              </span>
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-1 pr-1">
+            <button type="button" onClick={copyCode} aria-label="复制代码" className="rounded-md p-1.5 text-bolt-light-7 hover:bg-bolt-light-3 hover:text-bolt-light-11">
+              <Copy className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={downloadCode} aria-label="下载文件" className="rounded-md p-1.5 text-bolt-light-7 hover:bg-bolt-light-3 hover:text-bolt-light-11">
+              <Download className="h-4 w-4" />
+            </button>
+            {copied && <span className="pr-2 text-[11px] text-bolt-green">已复制</span>}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {!activeFile ? (
+            <div className="flex h-full items-center justify-center text-[13px] text-bolt-light-7">选择左侧文件查看代码</div>
+          ) : (
+            <div className="flex min-h-full font-mono text-[12.5px] leading-6">
+              <div className="sticky left-0 select-none border-r border-bolt-light-5 bg-bolt-light-2 px-3 py-4 text-right text-bolt-light-7">
+                {lines.map((_, index) => (
+                  <div key={`ln-${index}`}>{index + 1}</div>
+                ))}
+              </div>
+              <pre className="flex-1 overflow-x-auto whitespace-pre px-4 py-4 text-bolt-light-11">
+                <code>{activeFile.content}</code>
+              </pre>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase; currentStep: number; scenario: ScenarioConfig }) {
@@ -629,8 +1353,10 @@ function ExecutionPlanDock({ phase, currentStep, scenario }: { phase: BuildPhase
   );
 }
 
-export default function DesignPage({ project, initialPrompt, onCreateProject, onBack }: DesignPageProps) {
+export default function DesignPage({ project, initialPrompt, onCreateProject, onPromoteToProject, onBack }: DesignPageProps) {
   const [requestPrompt, setRequestPrompt] = useState(initialPrompt ?? project?.description ?? '');
+  const [requestPromptAt] = useState(() => project?.createdAt ?? new Date().toISOString());
+  const [clarifyingReplyKey, setClarifyingReplyKey] = useState(0);
   const scenario = getScenario(project ?? {
     id: 'draft',
     name: requestPrompt || '新建项目',
@@ -640,17 +1366,69 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   });
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
-  const [phase, setPhase] = useState<BuildPhase>(() => initialPrompt ? 'thinking' : project ? 'ready' : 'waiting');
+  const [phase, setPhase] = useState<BuildPhase>(() => {
+    if (initialPrompt) return 'clarifying';
+    if (project?.kind === 'chat') return 'clarifying';
+    if (project) return 'ready';
+    return 'waiting';
+  });
+  const [selectorDone, setSelectorDone] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [layoutMode, setLayoutMode] = useState<'focus' | 'three-column'>('focus');
-  const [isRestoring, setIsRestoring] = useState(Boolean(project && !initialPrompt));
+  const [isRestoring, setIsRestoring] = useState(Boolean(project && !initialPrompt && project.kind !== 'chat'));
   const [showPlanPanel, setShowPlanPanel] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const replyTimerRef = useRef<number | null>(null);
   const [previewExpired, setPreviewExpired] = useState(false);
+  const [previewEditMode, setPreviewEditMode] = useState(false);
+  const [selectedPreviewBlock, setSelectedPreviewBlock] = useState<string | null>(null);
+  const [previewComment, setPreviewComment] = useState('');
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [published, setPublished] = useState(false);
+  const [publishSuccessOpen, setPublishSuccessOpen] = useState(false);
+  const [copyToastOpen, setCopyToastOpen] = useState(false);
+  const publishMenuRef = useRef<HTMLDivElement>(null);
+  const shareMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const [chatAttachments, setChatAttachments] = useState<File[]>([]);
+
+  const publishShareUrl = `https://microapp.qieman.com/ai-lab/index.html#/share/${scenario.key}-${(project?.id ?? 'demo').slice(0, 8)}`;
+  const publishFileName = project?.name || scenario.title;
+
+  useEffect(() => {
+    if (!copyToastOpen) return;
+    const timer = window.setTimeout(() => setCopyToastOpen(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copyToastOpen]);
+
+  const copyPublishLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publishShareUrl);
+      setCopyToastOpen(true);
+    } catch {
+      setCopyToastOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!publishOpen && !shareOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (publishOpen && publishMenuRef.current && !publishMenuRef.current.contains(target)) {
+        setPublishOpen(false);
+      }
+      if (shareOpen && shareMenuRef.current && !shareMenuRef.current.contains(target)) {
+        setShareOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [publishOpen, shareOpen]);
 
   useEffect(() => {
     if (!isRestoring) return;
@@ -660,7 +1438,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, requestPrompt, isRefining]);
+  }, [messages, requestPrompt, isRefining, phase, currentStep]);
 
   useEffect(() => {
     if (phase === 'thinking') {
@@ -710,14 +1488,165 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     };
   }, [phase]);
 
+  const clearReplyTimer = () => {
+    if (replyTimerRef.current !== null) {
+      window.clearTimeout(replyTimerRef.current);
+      replyTimerRef.current = null;
+    }
+  };
+
+  const respondToUserContent = (content: string, mode: 'clarifying' | 'ready') => {
+    clearReplyTimer();
+    setIsRefining(true);
+    replyTimerRef.current = window.setTimeout(() => {
+      replyTimerRef.current = null;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-assistant`,
+          role: 'assistant',
+          content:
+            mode === 'clarifying'
+              ? `已重新理解你的消息：「${content}」。如果你准备好开始构建，可以再选一个上方选项，或直接告诉我“开始构建”。`
+              : `已根据你修改后的消息重新回复：「${content}」。Demo 中会按新要求更新展示。`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      setIsRefining(false);
+    }, mode === 'clarifying' ? 900 : 1200);
+  };
+
+  const stopGeneration = () => {
+    const wasBuilding = phase === 'thinking' || phase === 'planning' || phase === 'building';
+    const wasRefining = isRefining;
+    clearReplyTimer();
+    setIsRefining(false);
+
+    if (wasBuilding) {
+      if (phase === 'thinking') {
+        setPhase('clarifying');
+        setSelectorDone(true);
+      } else {
+        setPhase('ready');
+      }
+    }
+
+    if (wasBuilding || wasRefining) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-stopped`,
+          role: 'assistant',
+          content: '已中断生成。你可以继续补充需求，或再次发送。',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    }
+  };
+
+  const resendRequestPrompt = (next: string) => {
+    const content = next.trim();
+    if (!content) return;
+    setRequestPrompt(content);
+    setMessages([]);
+
+    if (phase === 'clarifying') {
+      setSelectorDone(false);
+      clearReplyTimer();
+      setIsRefining(true);
+      replyTimerRef.current = window.setTimeout(() => {
+        replyTimerRef.current = null;
+        setClarifyingReplyKey((key) => key + 1);
+        setIsRefining(false);
+      }, 700);
+      return;
+    }
+
+    if (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') {
+      if (project?.id) onPromoteToProject(project.id, content);
+      setSelectorDone(true);
+      setCurrentStep(-1);
+      setPhase('thinking');
+    }
+  };
+
+  const resendChatMessage = (messageId: string, next: string) => {
+    const content = next.trim();
+    if (!content) return;
+    setMessages((prev) => {
+      const index = prev.findIndex((item) => item.id === messageId);
+      if (index < 0) return prev;
+      const updated = { ...prev[index], content, timestamp: new Date().toISOString() };
+      return [...prev.slice(0, index), updated];
+    });
+    respondToUserContent(content, phase === 'clarifying' ? 'clarifying' : 'ready');
+  };
+
+  const startBuilding = (prompt: string) => {
+    const nextPrompt = prompt.trim();
+    if (!nextPrompt) return;
+    setRequestPrompt(nextPrompt);
+    if (project?.id) {
+      onPromoteToProject(project.id, nextPrompt);
+    }
+    setSelectorDone(true);
+    setPhase('thinking');
+  };
+
+  const handleIntentSubmit = (value: { optionId: string; title: string; customText?: string }) => {
+    if (value.optionId === 'explore') {
+      setSelectorDone(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: '好的，我们先继续聊需求。你可以补充目标用户、核心功能，或你最在意的数据指标。',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      return;
+    }
+
+    if (value.optionId === 'custom' && value.customText) {
+      startBuilding(value.customText);
+      return;
+    }
+
+    if (value.optionId === 'fund-compare') {
+      startBuilding('创建一个基金对比研究 Dashboard，对比多只基金的收益、回撤、波动率与持仓');
+      return;
+    }
+
+    if (value.optionId === 'portfolio') {
+      startBuilding('做一个基金组合健康诊断工具，分析资产配置、相关性与风险');
+      return;
+    }
+
+    const base = requestPrompt || project?.description || value.title;
+    startBuilding(`${base}。优先目标：${value.title}`);
+  };
+
   const sendMessage = () => {
-    if (!input.trim() || isRefining || (phase !== 'waiting' && phase !== 'ready')) return;
+    if (!input.trim() || isRefining || (phase !== 'waiting' && phase !== 'ready' && !(phase === 'clarifying' && selectorDone))) return;
     const content = input.trim();
     if (phase === 'waiting') {
       setRequestPrompt(content);
       setInput('');
       onCreateProject(content);
-      setPhase('thinking');
+      setPhase('clarifying');
+      setSelectorDone(false);
+      return;
+    }
+    if (phase === 'clarifying') {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString(),
+      }]);
+      setInput('');
+      respondToUserContent(content, 'clarifying');
       return;
     }
     setMessages((prev) => [...prev, {
@@ -727,12 +1656,29 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       timestamp: new Date().toISOString(),
     }]);
     setInput('');
+    respondToUserContent(content, 'ready');
+  };
+
+  const submitPreviewComment = () => {
+    const label = previewBlockLabel(selectedPreviewBlock);
+    const note = previewComment.trim();
+    if (!label || !note || isRefining || phase !== 'ready') return;
+    const content = `【预览留言 · ${label}】${note}`;
+    setMessages((prev) => [...prev, {
+      id: Date.now().toString(),
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    }]);
+    setPreviewComment('');
+    clearReplyTimer();
     setIsRefining(true);
-    window.setTimeout(() => {
+    replyTimerRef.current = window.setTimeout(() => {
+      replyTimerRef.current = null;
       setMessages((prev) => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `已记录修改要求：「${content}」。Demo 中保留原数据口径，并更新页面展示。`,
+        content: `已收到对「${label}」的修改建议。Demo 中会保留原数据口径，并按你的留言调整该组件展示。`,
         timestamp: new Date().toISOString(),
       }]);
       setIsRefining(false);
@@ -754,34 +1700,34 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
 
   const deviceWidths: Record<DeviceMode, string> = {
     desktop: '100%',
-    tablet: '768px',
     mobile: '390px',
   };
 
   const statusLabel = phase === 'waiting'
     ? '等待需求'
-    : phase === 'thinking'
-      ? '理解需求'
-      : phase === 'planning'
-        ? '生成计划'
-        : phase === 'building'
-          ? '执行中'
-          : '已完成';
+    : phase === 'clarifying'
+      ? '澄清需求'
+      : phase === 'thinking'
+        ? '理解需求'
+        : phase === 'planning'
+          ? '生成计划'
+          : phase === 'building'
+            ? '执行中'
+            : '已完成';
 
-  const canSend = phase === 'waiting' || phase === 'ready';
-
-  const mcpNames = scenario.steps.filter((step) => step.type === 'MCP').map((step) => `    '${step.name}'`).join(',\n');
-  const skillNames = scenario.steps.filter((step) => step.type === 'Skill').map((step) => `'${step.name}'`).join(', ');
-  const codeSnippet = `// Yingmi Lab · Plan Mode demo\nconst plan = {\n  scenario: '${scenario.key}',\n  mcpTools: [\n${mcpNames}\n  ],\n  skills: [${skillNames}],\n  output: '${scenario.title}',\n  dataMode: 'demo',\n};`;
+  const canSend = phase === 'waiting' || phase === 'ready' || (phase === 'clarifying' && selectorDone);
+  const isGenerating =
+    isRefining || phase === 'thinking' || phase === 'planning' || phase === 'building';
+  const inputEnabled = canSend || isGenerating;
 
   if (isRestoring) {
     return (
       <div data-testid="project-restoring" className="h-screen bg-white flex flex-col items-center justify-center text-center">
-        <img src="/resume-loading-mark.png" alt="" aria-hidden="true" className="w-[54px] h-7 object-contain mb-6 animate-pulse" />
-        <p className="text-[24px] tracking-wide text-bolt-light-12">
-          正在恢复项目，<span className="text-bolt-light-7">请稍候…</span>
+        <Loader2 className="w-8 h-8 text-bolt-blue animate-spin mb-6" />
+        <p className="text-[22px] tracking-wide text-bolt-light-12">
+          正在打开项目
         </p>
-        <p className="mt-3 text-[12px] text-bolt-light-7">正在加载上次的对话、执行计划与预览结果</p>
+        <p className="mt-3 text-[13px] text-bolt-light-7">正在加载对话、执行计划与预览</p>
       </div>
     );
   }
@@ -797,7 +1743,13 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               </button>
               <div className="flex-1 min-w-0">
                 <div className="text-[13.5px] font-semibold text-bolt-light-12 truncate">{project?.name ?? '新建项目'}</div>
-              <div className="text-[10.5px] text-bolt-light-7 truncate">{phase === 'waiting' ? '发送首条消息后创建项目' : `Plan Mode · ${scenario.badge}`}</div>
+              <div className="text-[10.5px] text-bolt-light-7 truncate">
+                {phase === 'waiting'
+                  ? '发送首条消息后开始聊天'
+                  : phase === 'clarifying' || project?.kind === 'chat'
+                    ? '聊天澄清中'
+                    : 'Plan Mode'}
+              </div>
               </div>
             </div>
 
@@ -809,9 +1761,13 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 </span>
               </div>
               <div className="space-y-1">
-                {(phase === 'waiting' || phase === 'thinking') ? (
+                {(phase === 'waiting' || phase === 'thinking' || phase === 'clarifying') ? (
                   <div className="rounded-lg border border-dashed border-bolt-light-5 px-3 py-5 text-center text-[10.5px] leading-relaxed text-bolt-light-7">
-                    {phase === 'waiting' ? '执行计划将在你发送需求后生成' : '正在理解需求，执行计划尚未生成'}
+                    {phase === 'waiting'
+                      ? '执行计划将在你发送需求后生成'
+                      : phase === 'clarifying'
+                        ? '确认方向后才会生成执行计划'
+                        : '正在理解需求，执行计划尚未生成'}
                   </div>
                 ) : scenario.steps.map((step, index) => {
                   const state = stepState(index);
@@ -868,19 +1824,16 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </button>
           )}
           <span className="text-[14px] font-semibold text-bolt-light-12">Plan Mode</span>
-          <span className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md bg-bolt-blue-light text-[10.5px] text-bolt-blue font-semibold">
-            <Sparkles className="w-3 h-3" />
-            {phase === 'waiting' ? '等待输入' : scenario.badge}
-          </span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {requestPrompt && (
-            <div className="flex justify-end">
-              <div className="max-w-[88%] rounded-2xl rounded-br-md bg-bolt-blue text-white px-3.5 py-2.5 text-[12.5px] leading-relaxed">
-                {requestPrompt}
-              </div>
-            </div>
+            <UserChatBubble
+              content={requestPrompt}
+              timestamp={requestPromptAt}
+              onCopied={() => setCopyToastOpen(true)}
+              onResend={resendRequestPrompt}
+            />
           )}
 
           {phase === 'waiting' && (
@@ -889,7 +1842,25 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 <Sparkles className="w-5 h-5 text-bolt-blue" />
               </div>
               <p className="text-[13px] font-medium text-bolt-light-10">先告诉我你想创建什么</p>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-bolt-light-7">发送第一条消息后，盈米实验室才会开始思考、规划和构建。</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-bolt-light-7">发送第一条消息后，会先进入聊天澄清需求，确认后再正式创建项目。</p>
+            </div>
+          )}
+
+          {phase === 'clarifying' && (
+            <div key={clarifyingReplyKey} className="space-y-3 animate-slide-up">
+              <div className="flex justify-start">
+                <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                  我理解你想围绕「{requestPrompt || project?.name || '这个想法'}」做点事情。在正式创建项目前，先选一个最贴近你目标的方向吧。
+                </div>
+              </div>
+              {!selectorDone && (
+                <IntentSelector
+                  question="你现在最想先做成哪一件事？"
+                  options={INTENT_OPTIONS}
+                  onSubmit={handleIntentSubmit}
+                  onSkip={() => startBuilding(requestPrompt || project?.description || '创建一个金融研究应用')}
+                />
+              )}
             </div>
           )}
 
@@ -913,14 +1884,8 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </div>
           )}
 
-          {phase === 'building' && (
-            <div className="rounded-xl border border-bolt-light-5 bg-white px-3.5 py-3 flex items-center gap-2 animate-slide-up">
-              <Loader2 className="w-4 h-4 text-bolt-blue animate-spin" />
-              <div className="min-w-0">
-                <p className="text-[12px] font-medium text-bolt-light-11">正在执行 {currentStep + 1}/{scenario.steps.length}</p>
-                <p className="text-[10.5px] text-bolt-light-7 truncate">{scenario.steps[currentStep]?.name}</p>
-              </div>
-            </div>
+          {(phase === 'building' || phase === 'ready') && (
+            <ExecutionChain phase={phase} currentStep={currentStep} scenario={scenario} />
           )}
 
           {phase === 'ready' && (
@@ -931,13 +1896,23 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </div>
           )}
 
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-              <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed ${message.role === 'user' ? 'bg-bolt-blue text-white rounded-br-md' : 'bg-white border border-bolt-light-5 text-bolt-light-11 rounded-bl-md'}`}>
-                {message.content}
+          {messages.map((message) =>
+            message.role === 'user' ? (
+              <UserChatBubble
+                key={message.id}
+                content={message.content}
+                timestamp={message.timestamp}
+                onCopied={() => setCopyToastOpen(true)}
+                onResend={(next) => resendChatMessage(message.id, next)}
+              />
+            ) : (
+              <div key={message.id} className="flex justify-start animate-slide-up">
+                <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                  {message.content}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
 
           {isRefining && (
             <div className="flex justify-start">
@@ -961,23 +1936,73 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={!canSend}
-              placeholder={phase === 'waiting' ? '描述你想创建的金融网站或应用...' : phase === 'ready' ? '继续修改这个项目...' : '正在思考、规划和构建...'}
+              disabled={!inputEnabled}
+              placeholder={
+                phase === 'waiting'
+                  ? '描述你想创建的金融网站或应用...'
+                  : phase === 'clarifying'
+                    ? selectorDone
+                      ? '继续补充需求，或选择上方方向开始构建...'
+                      : '也可以先选择上方方向...'
+                    : phase === 'ready'
+                      ? '继续修改这个项目...'
+                      : isGenerating
+                        ? 'AI 正在生成，可点击停止中断...'
+                        : '正在思考、规划和构建...'
+              }
               rows={1}
               className="w-full bg-transparent resize-none outline-none px-3.5 pt-3 pb-2 text-[13px] text-bolt-light-12 placeholder:text-bolt-light-7 disabled:cursor-not-allowed"
             />
+            {chatAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 px-3 pb-1">
+                {chatAttachments.map((file) => (
+                  <span key={`${file.name}-${file.size}`} className="inline-flex max-w-full items-center gap-1 rounded-md bg-bolt-light-3 px-2 py-0.5 text-[11px] text-bolt-light-10">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{file.name}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between px-2.5 pb-2.5">
-              <button disabled aria-label="Demo 中暂未开放附件" className="p-1.5 rounded-md text-bolt-light-7 cursor-not-allowed">
+              <button
+                type="button"
+                aria-label="添加文件"
+                onClick={() => chatFileInputRef.current?.click()}
+                className="rounded-md p-1.5 text-bolt-light-8 transition-colors hover:bg-bolt-light-3 hover:text-bolt-light-11"
+              >
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button
-                onClick={sendMessage}
-                aria-label="发送修改要求"
-                disabled={!input.trim() || isRefining || !canSend}
-                className={`p-1.5 rounded-md ${input.trim() && !isRefining && canSend ? 'bg-bolt-blue text-white hover:bg-bolt-blue-dark' : 'bg-bolt-light-4 text-bolt-light-7 cursor-not-allowed'}`}
-              >
-                <ArrowUp className="w-4 h-4" />
-              </button>
+              <input
+                ref={chatFileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  if (files.length > 0) setChatAttachments((prev) => [...prev, ...files]);
+                  event.target.value = '';
+                }}
+              />
+              {isGenerating ? (
+                <button
+                  type="button"
+                  onClick={stopGeneration}
+                  aria-label="停止生成"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-bolt-light-12 text-white transition-colors hover:bg-black"
+                >
+                  <span className="block h-2.5 w-2.5 rounded-[2px] bg-white" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  aria-label="发送修改要求"
+                  disabled={!input.trim() || !canSend}
+                  className={`p-1.5 rounded-md ${input.trim() && canSend ? 'bg-bolt-blue text-white hover:bg-bolt-blue-dark' : 'bg-bolt-light-4 text-bolt-light-7 cursor-not-allowed'}`}
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -992,7 +2017,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </button>
             <button onClick={() => setViewMode('code')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium ${viewMode === 'code' ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
               <Code2 className="w-4 h-4" />
-              配置
+              代码
             </button>
           </div>
 
@@ -1000,7 +2025,6 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             <div className="flex items-center gap-1 ml-2">
               {([
                 { mode: 'desktop' as DeviceMode, icon: Monitor, label: '桌面预览' },
-                { mode: 'tablet' as DeviceMode, icon: Tablet, label: '平板预览' },
                 { mode: 'mobile' as DeviceMode, icon: Smartphone, label: '手机预览' },
               ]).map(({ mode, icon: Icon, label }) => (
                 <button key={mode} onClick={() => setDeviceMode(mode)} aria-label={label} className={`p-1.5 rounded-md ${deviceMode === mode ? 'bg-bolt-light-4 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-10'}`}>
@@ -1016,14 +2040,81 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button disabled title="Demo 中暂未开放" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-bolt-light-5 text-[13px] font-medium text-bolt-light-7 cursor-not-allowed opacity-60">
-              <Globe className="w-4 h-4" />
-              发布
-            </button>
-            <button disabled title="Demo 中暂未开放" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bolt-light-4 text-bolt-light-7 text-[13px] font-medium cursor-not-allowed">
-              <Share2 className="w-4 h-4" />
-              分享
-            </button>
+            <div className="relative" ref={publishMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (published) {
+                    setPublishSuccessOpen(true);
+                    setPublishOpen(false);
+                    setShareOpen(false);
+                    return;
+                  }
+                  setPublishOpen((open) => !open);
+                  setShareOpen(false);
+                }}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${published ? 'bg-bolt-light-12 text-white' : 'border border-bolt-light-5 bg-white text-bolt-light-12 hover:bg-bolt-light-2'}`}
+              >
+                <Globe className="w-4 h-4" />
+                {published ? '已发布' : '发布'}
+              </button>
+              {publishOpen && !published && (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[280px] rounded-xl border border-bolt-light-5 bg-white p-4 shadow-xl animate-fade-in">
+                  <h3 className="text-[18px] font-bold tracking-tight text-bolt-light-12">发布</h3>
+                  <p className="mt-2 text-[13px] leading-relaxed text-bolt-light-8">
+                    发布后，外部用户可以访问你的应用
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPublished(true);
+                      setPublishOpen(false);
+                      setPublishSuccessOpen(true);
+                    }}
+                    className="mt-4 w-full rounded-xl bg-bolt-light-12 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+                  >
+                    立即发布
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="relative" ref={shareMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareOpen((open) => !open);
+                  setPublishOpen(false);
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-bolt-light-3 px-3 py-1.5 text-[13px] font-medium text-bolt-light-11 transition-colors hover:bg-bolt-light-4"
+              >
+                <Share2 className="w-4 h-4" />
+                分享
+              </button>
+              {shareOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[280px] rounded-xl border border-bolt-light-5 bg-white p-4 shadow-xl animate-fade-in">
+                  <h3 className="text-[18px] font-bold tracking-tight text-bolt-light-12">分享</h3>
+                  <p className="mt-2 text-[13px] leading-relaxed text-bolt-light-8">
+                    复制链接后，可邀请同事一起查看这个 Demo 项目
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const shareUrl = `https://lab.yingmi.demo/p/${scenario.key}`;
+                      try {
+                        await navigator.clipboard.writeText(shareUrl);
+                      } catch {
+                        // ignore clipboard failures in demo
+                      }
+                      setShareOpen(false);
+                    }}
+                    className="mt-4 w-full rounded-xl bg-bolt-light-12 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+                  >
+                    复制分享链接
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1032,7 +2123,6 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             <div className="bg-white rounded-lg shadow-md border border-bolt-light-5 overflow-hidden transition-all duration-300" style={{ width: deviceWidths[deviceMode], maxWidth: '100%', height: '100%' }}>
               {phase === 'ready' && previewExpired ? (
                 <div data-testid="preview-expired" className="h-full flex flex-col items-center justify-center bg-white p-8 text-center">
-                  <img src="/resume-loading-mark.png" alt="" aria-hidden="true" className="w-[54px] h-7 object-contain mb-7" />
                   <h2 className="text-[22px] font-bold tracking-tight text-bolt-light-12">预览暂时休眠</h2>
                   <p className="mt-3 max-w-md text-[14px] leading-relaxed text-bolt-light-7">
                     为了节省资源，长时间未操作的项目已暂停预览。唤醒后可从当前位置继续查看和编辑。
@@ -1052,6 +2142,14 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                   </div>
                   <h2 className="text-lg font-bold text-bolt-light-12 mb-2">等待你的需求</h2>
                   <p className="text-bolt-light-8 text-sm max-w-sm">发送第一条消息后，这里会开始生成网站或应用预览。</p>
+                </div>
+              ) : phase === 'clarifying' ? (
+                <div data-testid="clarifying-preview" className="h-full flex flex-col items-center justify-center bolt-grid-bg p-8 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center mb-4">
+                    <MessageCircle className="w-8 h-8 text-bolt-purple" />
+                  </div>
+                  <h2 className="text-lg font-bold text-bolt-light-12 mb-2">还在聊天澄清需求</h2>
+                  <p className="text-bolt-light-8 text-sm max-w-sm">确认方向并提交后，这里才会开始生成项目预览。</p>
                 </div>
               ) : phase === 'thinking' ? (
                 <div className="h-full flex flex-col items-center justify-center bolt-grid-bg p-8 text-center">
@@ -1084,23 +2182,36 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                   <p className="text-[11px] text-bolt-light-7 mt-2">{currentStep + 1} / {scenario.steps.length}</p>
                 </div>
               ) : (
-                <ProjectPreview scenario={scenario} />
+                <PreviewChrome
+                  editMode={previewEditMode}
+                  onEditModeChange={(value) => {
+                    setPreviewEditMode(value);
+                    if (!value) {
+                      setSelectedPreviewBlock(null);
+                      setPreviewComment('');
+                    }
+                  }}
+                  selectedLabel={previewBlockLabel(selectedPreviewBlock)}
+                  comment={previewComment}
+                  onCommentChange={setPreviewComment}
+                  onSubmitComment={submitPreviewComment}
+                  isSubmitting={isRefining}
+                >
+                  <ProjectPreview
+                    scenario={scenario}
+                    editMode={previewEditMode}
+                    selectedId={selectedPreviewBlock}
+                    onSelect={(id) => setSelectedPreviewBlock(id || null)}
+                  />
+                </PreviewChrome>
               )}
             </div>
           ) : phase === 'waiting' ? (
-            <div className="w-full h-full bg-[#111827] rounded-lg shadow-md border border-bolt-light-5 flex items-center justify-center text-sm text-slate-500">
-              发送需求后生成项目配置
+            <div className="flex h-full w-full items-center justify-center rounded-lg border border-bolt-light-5 bg-white text-sm text-bolt-light-7 shadow-md">
+              发送需求后生成项目代码
             </div>
           ) : (
-            <div className="w-full h-full bg-[#111827] rounded-lg shadow-md border border-bolt-light-5 overflow-hidden flex flex-col">
-              <div className="h-10 border-b border-white/10 bg-[#1f2937] flex items-center px-4">
-                <span className="text-[11px] text-slate-400 font-mono">plan.config.ts</span>
-                <span className="ml-auto text-[10px] text-amber-300 bg-amber-300/10 rounded px-2 py-0.5">Demo</span>
-              </div>
-              <div className="flex-1 overflow-auto p-5 font-mono text-[13px] leading-relaxed">
-                <pre className="text-slate-300"><code>{codeSnippet}</code></pre>
-              </div>
-            </div>
+            <CodeWorkspace scenario={scenario} />
           )}
         </div>
       </main>
@@ -1125,6 +2236,72 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           三栏模式
         </button>
       </div>
+
+      {publishSuccessOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4" onClick={() => setPublishSuccessOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publish-success-title"
+            className="w-full max-w-[420px] rounded-2xl bg-white p-5 shadow-2xl animate-fade-in"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 id="publish-success-title" className="text-[18px] font-bold tracking-tight text-bolt-light-12">
+                分享链接已生成
+              </h3>
+              <button
+                type="button"
+                aria-label="关闭"
+                onClick={() => setPublishSuccessOpen(false)}
+                className="rounded-full bg-bolt-light-3 p-1.5 text-bolt-light-7 hover:bg-bolt-light-4 hover:text-bolt-light-11"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 text-[13px] text-bolt-light-11">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100 text-bolt-purple">
+                <FileText className="h-4 w-4" />
+              </span>
+              <span className="truncate font-medium">{publishFileName}</span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-bolt-light-3 px-3 py-2.5">
+              <p className="min-w-0 flex-1 truncate font-mono text-[12px] text-bolt-light-9">
+                {publishShareUrl}
+              </p>
+              <button
+                type="button"
+                onClick={copyPublishLink}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-bolt-blue/30 bg-bolt-blue-light px-2.5 py-1.5 text-[12px] font-semibold text-bolt-blue hover:bg-[#dbeafe]"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                复制
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPublishSuccessOpen(false)}
+              className="mt-5 w-full rounded-xl bg-bolt-blue px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-bolt-blue-dark"
+            >
+              完成
+            </button>
+          </div>
+        </div>
+      )}
+
+      {copyToastOpen && (
+        <div className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center">
+          <div className="rounded-2xl bg-white px-8 py-6 text-center shadow-2xl animate-fade-in">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-bolt-blue">
+              <Check className="h-6 w-6 text-white" strokeWidth={2.5} />
+            </div>
+            <p className="mt-3 text-[15px] font-semibold text-bolt-light-11">复制成功</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

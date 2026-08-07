@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderKanban } from 'lucide-react';
+import { FolderKanban, MessageCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import PromptBox from '@/components/PromptBox';
 import ProjectGrid from '@/components/ProjectGrid';
@@ -94,39 +94,51 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
 
                 {/* Recent chats and projects strip */}
                 {projects.length > 0 && (
-                  <div className="max-w-3xl mx-auto mt-12">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-[13px] font-semibold text-bolt-light-9 tracking-wider">
-                        最近
-                      </h3>
-                      <button
-                        onClick={() => onViewChange('workspace')}
-                        className="text-[13px] text-bolt-blue hover:underline font-medium"
-                      >
-                        查看全部
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {projects.slice(0, 3).map((project) => (
-                        <div
-                          key={project.id}
-                          onClick={() => onOpenProject(project.id)}
-                          className="group rounded-xl border border-bolt-light-5 bg-white overflow-hidden cursor-pointer bolt-card-hover"
-                        >
-                          <div className="aspect-video bg-gradient-to-br from-bolt-light-3 to-bolt-light-5 relative bolt-grid-bg">
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-sm">
-                                <FolderKanban className="w-5 h-5 text-bolt-light-8" />
-                              </div>
-                            </div>
+                  <div className="max-w-3xl mx-auto mt-12 space-y-8">
+                    {(['chat', 'project'] as const).map((kind) => {
+                      const items = projects.filter((item) => (item.kind ?? 'project') === kind).slice(0, 3);
+                      if (items.length === 0) return null;
+                      const Icon = kind === 'chat' ? MessageCircle : FolderKanban;
+                      return (
+                        <div key={kind}>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-[13px] font-semibold text-bolt-light-9 tracking-wider">
+                              最近{kind === 'chat' ? '聊天' : '项目'}
+                            </h3>
+                            <button
+                              onClick={() => onViewChange('workspace')}
+                              className="text-[13px] text-bolt-blue hover:underline font-medium"
+                            >
+                              查看全部
+                            </button>
                           </div>
-                          <div className="p-3">
-                            <h4 className="text-[13px] font-semibold text-bolt-light-12 truncate">{project.name}</h4>
-                            <p className="text-[11.5px] text-bolt-light-8 mt-0.5 truncate">{project.description}</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {items.map((project) => (
+                              <div
+                                key={project.id}
+                                onClick={() => onOpenProject(project.id)}
+                                className="group rounded-xl border border-bolt-light-5 bg-white overflow-hidden cursor-pointer bolt-card-hover"
+                              >
+                                <div className="aspect-video bg-gradient-to-br from-bolt-light-3 to-bolt-light-5 relative bolt-grid-bg">
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-sm">
+                                      <Icon className={`w-5 h-5 ${kind === 'chat' ? 'text-bolt-purple' : 'text-bolt-light-8'}`} />
+                                    </div>
+                                  </div>
+                                  <span className="absolute left-2 top-2 rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-bolt-light-8">
+                                    {kind === 'chat' ? '聊天' : '项目'}
+                                  </span>
+                                </div>
+                                <div className="p-3">
+                                  <h4 className="text-[13px] font-semibold text-bolt-light-12 truncate">{project.name}</h4>
+                                  <p className="text-[11.5px] text-bolt-light-8 mt-0.5 truncate">{project.description}</p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
