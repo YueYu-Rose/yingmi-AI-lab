@@ -31,11 +31,13 @@ const TAB_PLACEHOLDERS: Record<ToolsTabId, { title: string; description: string;
   },
   agent: {
     title: 'Agent',
-    description: '可编排 MCP 与 Skills 的智能助手。具体列表稍后补充。',
+    description:
+      'Agent 负责编排 MCP 与 Skills，按研究、诊断、报告等任务自动组织调用顺序。完整目录后续会与能力市场对齐。',
   },
   components: {
     title: '组件',
-    description: '可复用的金融界面模块与可视化组件。具体列表稍后补充。',
+    description:
+      '组件是可复用的金融界面模块，用于拼装图表、表格、报告页等预览结果。完整目录后续会继续补充。',
   },
 };
 

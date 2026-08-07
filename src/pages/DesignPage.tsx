@@ -106,7 +106,8 @@ const COMPARISON_FOLLOWUP_DEMO: {
   capabilities: CapabilityRecord[];
 } = {
   prompt: '再加一列基金经理任职年限，并高亮回撤超过 15% 的基金',
-  assistant: '已按你的要求更新对比表：新增基金经理任职年限，并对回撤超过 15% 的标的做了高亮提示。本轮 Plan 与能力汇总已同步。',
+  assistant:
+    '已根据你的修改重新执行本轮计划。输入框上方的 Plan，以及「能力」中的 MCP / Skills / Agent / 组件汇总已更新。',
   steps: [
     { name: '批量获取基金详情', type: 'MCP', detail: '补充基金经理与任职年限信息' },
     { name: 'fund-analyst', type: 'Skill', detail: '按回撤阈值标注风险标的' },
@@ -1591,6 +1592,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [initialPlanCommitted, setInitialPlanCommitted] = useState(
     () => Boolean(project && !initialPrompt && project.kind !== 'chat')
   );
+  const [initialPlanSteps, setInitialPlanSteps] = useState<ExecutionStep[]>(() => [...scenario.steps]);
   const [activeSteps, setActiveSteps] = useState<ExecutionStep[]>(() => [...scenario.steps]);
   const [capabilityLog, setCapabilityLog] = useState<CapabilityRecord[]>(() =>
     project && !initialPrompt && project.kind !== 'chat' ? defaultProjectCapabilities(scenario) : []
@@ -1603,6 +1605,8 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const pendingCapabilityRecordsRef = useRef<CapabilityRecord[] | null>(null);
   const followUpPromptRef = useRef<string | null>(null);
   const followUpAssistantRef = useRef<string | null>(null);
+  const isFollowUpRunning =
+    initialPlanCommitted && (phase === 'thinking' || phase === 'planning' || phase === 'building');
   const [previewExpired, setPreviewExpired] = useState(false);
   const [previewEditMode, setPreviewEditMode] = useState(false);
   const [selectedPreviewBlock, setSelectedPreviewBlock] = useState<string | null>(null);
@@ -1691,6 +1695,9 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       const records = pendingCapabilityRecordsRef.current ?? activeSteps;
       pendingCapabilityRecordsRef.current = null;
       setCapabilityLog((prev) => [...prev, ...records]);
+      if (!initialPlanCommitted) {
+        setInitialPlanSteps([...activeSteps]);
+      }
       setInitialPlanCommitted(true);
 
       const followUp = followUpPromptRef.current;
@@ -1698,7 +1705,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
         followUpPromptRef.current = null;
         const assistantContent =
           followUpAssistantRef.current ??
-          `已按「${followUp}」完成更新。本轮重新调用了相关 MCP、Skills、Agent 与组件，右侧预览与能力汇总已同步。`;
+          `已根据「${followUp}」重新执行本轮计划。Plan 与「能力」汇总已更新。`;
         followUpAssistantRef.current = null;
         setMessages((prev) => [
           ...prev,
@@ -1824,9 +1831,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       if (project?.id) onPromoteToProject(project.id, content);
       setSelectorDone(true);
       setActiveSteps(scenario.steps);
+      setInitialPlanSteps(scenario.steps);
       pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
       pendingCapabilityLogRef.current = true;
       followUpPromptRef.current = null;
+      followUpAssistantRef.current = null;
       setInitialPlanCommitted(false);
       setCapabilityLog([]);
       setCurrentStep(-1);
@@ -1855,9 +1864,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     }
     setSelectorDone(true);
     setActiveSteps(scenario.steps);
+    setInitialPlanSteps(scenario.steps);
     pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
     pendingCapabilityLogRef.current = true;
     followUpPromptRef.current = null;
+    followUpAssistantRef.current = null;
     setCurrentStep(-1);
     setPhase('thinking');
   };
@@ -2057,10 +2068,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                         ? '确认方向后才会生成执行计划'
                         : '正在理解需求，执行计划尚未生成'}
                   </div>
-                ) : scenario.steps.map((step, index) => {
+                ) : activeSteps.map((step, index) => {
                   const state = stepState(index);
                   return (
-                    <div key={step.name} className={`rounded-lg border p-2.5 transition-all ${state === 'active' ? 'border-bolt-blue bg-bolt-blue-light' : 'border-transparent hover:bg-bolt-light-3'}`}>
+                    <div key={`${step.name}-${index}`} className={`rounded-lg border p-2.5 transition-all ${state === 'active' ? 'border-bolt-blue bg-bolt-blue-light' : 'border-transparent hover:bg-bolt-light-3'}`}>
                       <div className="flex items-start gap-2">
                         {state === 'done' ? (
                           <CheckCircle2 className="w-4 h-4 text-bolt-green mt-0.5 shrink-0" />
@@ -2162,8 +2173,8 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             <>
               <PlanCard
                 phase="ready"
-                currentStep={scenario.steps.length}
-                steps={scenario.steps}
+                currentStep={initialPlanSteps.length}
+                steps={initialPlanSteps}
                 title={scenario.title}
                 planDescription={scenario.planDescription}
               />
@@ -2172,7 +2183,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                   计划已经生成。我会按计划调用盈米 MCP 与 Skills，现在开始构建「{scenario.title}」。
                 </div>
               </div>
-              <ExecutionChain phase="ready" currentStep={scenario.steps.length} steps={scenario.steps} />
+              <ExecutionChain phase="ready" currentStep={initialPlanSteps.length} steps={initialPlanSteps} />
               <div className="flex justify-start animate-slide-up">
                 <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
                   {scenario.completion}
@@ -2185,7 +2196,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 <PlanCard
                   phase={phase}
                   currentStep={currentStep}
-                  steps={scenario.steps}
+                  steps={activeSteps}
                   title={scenario.title}
                   planDescription={scenario.planDescription}
                 />
@@ -2198,7 +2209,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 </div>
               )}
               {(phase === 'building' || phase === 'ready') && (
-                <ExecutionChain phase={phase} currentStep={currentStep} steps={scenario.steps} />
+                <ExecutionChain phase={phase} currentStep={currentStep} steps={activeSteps} />
               )}
               {phase === 'ready' && (
                 <div className="flex justify-start animate-slide-up">
@@ -2226,6 +2237,32 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 </div>
               </div>
             )
+          )}
+
+          {isFollowUpRunning && (
+            <>
+              {phase === 'thinking' && (
+                <div data-testid="followup-thinking-status" className="rounded-xl border border-bolt-light-5 bg-white px-3.5 py-3 flex items-center gap-2 animate-slide-up">
+                  <Loader2 className="w-4 h-4 text-bolt-blue animate-spin" />
+                  <div>
+                    <p className="text-[12px] font-medium text-bolt-light-11">正在理解你的修改需求</p>
+                    <p className="text-[10.5px] text-bolt-light-7 mt-0.5">正在重新匹配本轮需要的盈米 MCP、Skills、Agent 与组件...</p>
+                  </div>
+                </div>
+              )}
+              {(phase === 'planning' || phase === 'building') && (
+                <PlanCard
+                  phase={phase}
+                  currentStep={currentStep}
+                  steps={activeSteps}
+                  title={scenario.title}
+                  planDescription="根据你的修改需求，重新编排本轮要调用的能力。"
+                />
+              )}
+              {phase === 'building' && (
+                <ExecutionChain phase={phase} currentStep={currentStep} steps={activeSteps} />
+              )}
+            </>
           )}
 
           {isRefining && (
