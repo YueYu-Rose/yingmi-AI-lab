@@ -11,6 +11,7 @@ export interface Project {
   description: string;
   thumbnail?: string;
   starred: boolean;
+  pinned?: boolean;
   lastViewed?: string;
   sharedBy?: string;
   createdAt: string;

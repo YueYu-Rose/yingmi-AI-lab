@@ -15,8 +15,11 @@ import {
   PanelsTopLeft,
   PlugZap,
   Search,
+  Share2,
   Smartphone,
   Sparkles,
+  UserPlus,
+  UserRound,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -224,6 +227,7 @@ interface PlazaPageProps {
 export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPageProps) {
   const [templates, setTemplates] = useState<PlazaTemplate[]>(loadTemplates);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(() => new URLSearchParams(window.location.search).get('author'));
   const [likedIds, setLikedIds] = useState<string[]>(() => {
     try {
       return JSON.parse(window.localStorage.getItem(PLAZA_LIKES_KEY) ?? '[]') as string[];
@@ -261,6 +265,15 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
     onDetailChange?.(true);
   };
 
+  const openAuthor = (author: string) => {
+    setSelectedAuthor(author);
+    setSelectedId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.set('author', author);
+    window.history.replaceState(null, '', url);
+    onDetailChange?.(true);
+  };
+
   const toggleLike = (id: string) => {
     const alreadyLiked = likedIds.includes(id);
     setLikedIds((ids) => alreadyLiked ? ids.filter((likedId) => likedId !== id) : [...ids, id]);
@@ -276,10 +289,30 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
         liked={likedIds.includes(selected.id)}
         onBack={() => {
           setSelectedId(null);
-          onDetailChange?.(false);
+          onDetailChange?.(Boolean(selectedAuthor));
         }}
+        onOpenAuthor={() => openAuthor(selected.author)}
         onToggleLike={() => toggleLike(selected.id)}
         onUse={() => onUseTemplate(`请使用「${selected.title}」模板，基于我的需求创建一个金融应用。保留模板的信息架构与可视化方式，并先向我确认需要替换的数据和内容。`)}
+      />
+    );
+  }
+
+  if (selectedAuthor) {
+    return (
+      <AuthorProfile
+        author={selectedAuthor}
+        templates={templates.filter((template) => template.author === selectedAuthor)}
+        likedIds={likedIds}
+        onBack={() => {
+          setSelectedAuthor(null);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('author');
+          window.history.replaceState(null, '', url);
+          onDetailChange?.(false);
+        }}
+        onOpenTemplate={openTemplate}
+        onToggleLike={toggleLike}
       />
     );
   }
@@ -348,7 +381,8 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
                       <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-bolt-blue">{item.category}</span>
                     </div>
                     <p className="mt-1 flex items-center gap-1 text-[12.5px] text-bolt-light-8">
-                      by {item.author}
+                      <span>by</span>
+                      <button type="button" onClick={() => openAuthor(item.author)} className="transition hover:text-bolt-blue hover:underline">{item.author}</button>
                       {item.official && <BadgeCheck className="h-3.5 w-3.5 text-bolt-blue" aria-label="盈米官方" />}
                     </p>
                   </div>
@@ -376,16 +410,131 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
   );
 }
 
+const AUTHOR_PROFILES: Record<string, { bio: string; following: number; followers: number }> = {
+  王钊灏: { bio: '专注于 QDII 基金筛选、额度管理与指数投资工具，让复杂的基金选择更简单。', following: 18, followers: 286 },
+  盈米研究团队: { bio: '围绕基金研究、组合分析与金融数据可视化，持续发布可复用的专业应用。', following: 12, followers: 1240 },
+  林小满: { bio: '关注家庭资产配置与组合风险，用直观的产品帮助用户理解自己的投资。', following: 31, followers: 194 },
+  盈米内容实验室: { bio: '探索 AI 在金融内容生产与市场解读中的应用方式。', following: 8, followers: 826 },
+  周予安: { bio: '专注家庭财富规划、长期目标管理与资产配置体验。', following: 24, followers: 168 },
+};
+
+function AuthorProfile({
+  author,
+  templates,
+  likedIds,
+  onBack,
+  onOpenTemplate,
+  onToggleLike,
+}: {
+  author: string;
+  templates: PlazaTemplate[];
+  likedIds: string[];
+  onBack: () => void;
+  onOpenTemplate: (id: string) => void;
+  onToggleLike: (id: string) => void;
+}) {
+  const [followed, setFollowed] = useState(false);
+  const [shared, setShared] = useState(false);
+  const profile = AUTHOR_PROFILES[author] ?? { bio: '该用户还没有填写个人简介。', following: 0, followers: 0 };
+  const totalLikes = templates.reduce((sum, template) => sum + template.likes, 0);
+  const official = templates.some((template) => template.official);
+
+  const shareProfile = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      // 浏览器不允许访问剪贴板时，仍展示轻量成功反馈，避免阻断演示流程。
+    }
+    setShared(true);
+    window.setTimeout(() => setShared(false), 1600);
+  };
+
+  return (
+    <main className="min-h-full px-6 py-8 animate-fade-in sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-[1440px]">
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-[13px] font-medium text-bolt-light-8 transition hover:text-bolt-light-12">
+          <ArrowLeft className="h-4 w-4" /> 返回应用广场
+        </button>
+
+        <section className="mt-8 flex flex-col gap-6 border-b border-bolt-light-5 pb-9 md:flex-row md:items-start md:justify-between">
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-bolt-blue-light text-bolt-blue ring-1 ring-bolt-blue/10">
+              <UserRound className="h-9 w-9" />
+            </div>
+            <div className="min-w-0 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-[24px] font-bold tracking-tight text-bolt-light-12">{author}</h1>
+                {official && <BadgeCheck className="h-5 w-5 text-bolt-blue" aria-label="盈米官方" />}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-bolt-light-8">
+                <span>关注 <strong className="ml-1 font-semibold text-bolt-light-11">{profile.following}</strong></span>
+                <span>粉丝 <strong className="ml-1 font-semibold text-bolt-light-11">{profile.followers + (followed ? 1 : 0)}</strong></span>
+                <span>获赞 <strong className="ml-1 font-semibold text-bolt-light-11">{formatCount(totalLikes)}</strong></span>
+              </div>
+              <p className="mt-3 max-w-2xl text-[13px] leading-6 text-bolt-light-8">{profile.bio}</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 md:pt-1">
+            <button type="button" onClick={() => setFollowed((value) => !value)} className={`inline-flex h-10 items-center gap-2 rounded-xl px-5 text-[13px] font-semibold transition ${followed ? 'border border-bolt-light-5 bg-white text-bolt-light-10 hover:bg-bolt-light-2' : 'bg-bolt-blue text-white hover:brightness-95'}`}>
+              <UserPlus className="h-4 w-4" /> {followed ? '已关注' : '关注'}
+            </button>
+            <button type="button" onClick={shareProfile} className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-light-5 bg-white px-4 text-[13px] font-medium text-bolt-light-10 transition hover:bg-bolt-light-2">
+              <Share2 className="h-4 w-4" /> {shared ? '已复制链接' : '分享主页'}
+            </button>
+          </div>
+        </section>
+
+        <section className="pt-8">
+          <div>
+            <h2 className="text-[20px] font-bold text-bolt-light-12">作品</h2>
+            <p className="mt-1 text-[12.5px] text-bolt-light-7">共 {templates.length} 个作品</p>
+          </div>
+
+          {templates.length > 0 ? (
+            <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {templates.map((template) => (
+                <article key={template.id} className="group min-w-0">
+                  <button type="button" onClick={() => onOpenTemplate(template.id)} className="block w-full overflow-hidden rounded-2xl border border-bolt-light-5 bg-bolt-light-2 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-bolt-light-6 hover:shadow-md">
+                    <div className="aspect-[16/9] overflow-hidden bg-white p-2.5">
+                      <img src={template.cover} alt={`${template.title}应用首页缩略图`} className="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.01]" />
+                    </div>
+                  </button>
+                  <div className="mt-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{template.title}</h3>
+                      <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-bolt-blue">{template.category}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-end gap-4 text-[11px] text-bolt-light-7">
+                      <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> {formatCount(template.views)}</span>
+                      <button type="button" onClick={() => onToggleLike(template.id)} aria-pressed={likedIds.includes(template.id)} className={`inline-flex items-center gap-1 transition hover:text-bolt-red ${likedIds.includes(template.id) ? 'text-bolt-red' : ''}`}>
+                        <Heart className={`h-3.5 w-3.5 ${likedIds.includes(template.id) ? 'fill-current' : ''}`} /> {formatCount(template.likes)}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed border-bolt-light-6 px-6 py-16 text-center text-[13px] text-bolt-light-7">暂无作品</div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function TemplateDetail({
   template,
   liked,
   onBack,
+  onOpenAuthor,
   onUse,
   onToggleLike,
 }: {
   template: PlazaTemplate;
   liked: boolean;
   onBack: () => void;
+  onOpenAuthor: () => void;
   onUse: () => void;
   onToggleLike: () => void;
 }) {
@@ -423,10 +572,11 @@ function TemplateDetail({
             <div className="min-w-0">
               <h1 className="truncate text-[28px] font-semibold tracking-tight text-bolt-light-12" title={template.title}>{template.title}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-bolt-light-8">
-                <span className="inline-flex items-center gap-1.5">
-                  by {template.author}
+                <span>by</span>
+                <button type="button" onClick={onOpenAuthor} className="inline-flex items-center gap-1.5 transition hover:text-bolt-blue hover:underline">
+                  {template.author}
                   {template.official && <BadgeCheck className="h-4 w-4 text-bolt-blue" />}
-                </span>
+                </button>
                 <button type="button" onClick={() => setFollowed((value) => !value)} className={`shrink-0 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold transition ${followed ? 'bg-blue-50 text-bolt-blue' : 'bg-bolt-blue text-white'}`}>
                   {followed ? '已关注' : '+ 关注'}
                 </button>

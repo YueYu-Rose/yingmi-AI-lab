@@ -230,6 +230,15 @@ function App() {
     }
   };
 
+  const handleTogglePin = (id: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, pinned: !p.pinned } : p))
+    );
+    if (activeProject?.id === id) {
+      setActiveProject((prev) => prev ? { ...prev, pinned: !prev.pinned } : prev);
+    }
+  };
+
   const handleRenameProject = (id: string, newName: string) => {
     setProjects((prev) =>
       prev.map((p) => (p.id === id ? { ...p, name: newName } : p))
@@ -241,6 +250,11 @@ function App() {
 
   const handleDeleteProject = (id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
+    if (activeProject?.id === id) {
+      setActiveProject(null);
+      setInitialPrompt(null);
+      setCurrentPage('home');
+    }
   };
 
   const handleBack = () => {
@@ -278,6 +292,7 @@ function App() {
       onViewChange={handleFrontViewChange}
       projects={projects}
       onToggleStar={handleToggleStar}
+      onTogglePin={handleTogglePin}
       onOpenProject={handleOpenProject}
       onNewProject={handleNewProject}
       onRenameProject={handleRenameProject}

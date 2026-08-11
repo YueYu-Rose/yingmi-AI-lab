@@ -77,6 +77,14 @@ interface CustomMcp {
   accent: string;
 }
 
+interface CustomSkill {
+  id: string;
+  name: string;
+  source: string;
+  abilities: string[];
+  enabled: boolean;
+}
+
 const CAPABILITIES: Record<Exclude<CapabilityTab, 'mcp'>, CapabilityItem[]> = {
   skills: [
     {
@@ -237,7 +245,9 @@ export default function ToolsPage() {
   const [activeTab, setActiveTab] = useState<CapabilityTab>('mcp');
   const [search, setSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addSkillModalOpen, setAddSkillModalOpen] = useState(false);
   const [customMcps, setCustomMcps] = useState<CustomMcp[]>(INITIAL_CUSTOM_MCPS);
+  const [customSkills, setCustomSkills] = useState<CustomSkill[]>([]);
 
   useEffect(() => setSearch(''), [activeTab]);
 
@@ -295,6 +305,13 @@ export default function ToolsPage() {
             onChange={setCustomMcps}
             onAddCustom={() => setAddModalOpen(true)}
           />
+        ) : activeTab === 'skills' ? (
+          <SkillsCapabilityView
+            search={search}
+            customSkills={customSkills}
+            onChange={setCustomSkills}
+            onAddCustom={() => setAddSkillModalOpen(true)}
+          />
         ) : (
           <OfficialCapabilityList activeTab={activeTab} search={search} />
         )}
@@ -304,6 +321,12 @@ export default function ToolsPage() {
         <AddCustomMcpModal
           onSave={(item) => setCustomMcps((items) => [...items, item])}
           onClose={() => setAddModalOpen(false)}
+        />
+      )}
+      {addSkillModalOpen && (
+        <AddCustomSkillModal
+          onSave={(item) => setCustomSkills((items) => [...items, item])}
+          onClose={() => setAddSkillModalOpen(false)}
         />
       )}
     </main>
@@ -502,13 +525,162 @@ function McpCapabilityView({
   );
 }
 
+function SkillsCapabilityView({
+  search,
+  customSkills,
+  onChange,
+  onAddCustom,
+}: {
+  search: string;
+  customSkills: CustomSkill[];
+  onChange: Dispatch<SetStateAction<CustomSkill[]>>;
+  onAddCustom: () => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const query = search.trim().toLowerCase();
+  const officialSkills = CAPABILITIES.skills.filter((item) =>
+    [item.name, item.description, item.meta].some((value) => value.toLowerCase().includes(query)),
+  );
+  const filteredCustom = customSkills.filter((item) =>
+    [item.name, item.source, ...item.abilities].some((value) => value.toLowerCase().includes(query)),
+  );
+
+  const toggleSkill = (id: string) => {
+    onChange((items) => items.map((item) => {
+      if (item.id !== id) return item;
+      if (item.enabled && expanded === id) setExpanded(null);
+      return { ...item, enabled: !item.enabled };
+    }));
+  };
+
+  const deleteSkill = (id: string, name: string) => {
+    if (!window.confirm(`确定删除自定义 Skill「${name}」吗？删除后需要重新添加才能使用。`)) return;
+    if (expanded === id) setExpanded(null);
+    onChange((items) => items.filter((item) => item.id !== id));
+  };
+
+  return (
+    <div className="mt-8 space-y-8">
+      {officialSkills.length > 0 && (
+        <section>
+          <h2 className="text-[16px] font-semibold text-bolt-light-11">平台内置能力</h2>
+          <p className="mt-1 text-[12px] text-bolt-light-7">平台提供的 Skills，实际可用状态以账号接入配置为准。</p>
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {officialSkills.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article key={item.id} className="flex items-center gap-4 rounded-xl border border-bolt-light-5 bg-white px-5 py-5">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.accent}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{item.name}</h3>
+                    <p className="mt-1 text-[12.5px] leading-5 text-bolt-light-8">{item.description}</p>
+                    <span className="mt-1.5 block text-[11.5px] text-bolt-light-7">{item.meta}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[16px] font-semibold text-bolt-light-11">我的扩展能力</h2>
+            <p className="mt-1 text-[12px] text-bolt-light-7">添加团队或个人 Skill，并控制智能体是否可以调用。</p>
+          </div>
+          <button
+            type="button"
+            onClick={onAddCustom}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-blue bg-white px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
+          >
+            <Plus className="h-4 w-4" />
+            添加自定义 Skill
+          </button>
+        </div>
+
+        {filteredCustom.length > 0 ? (
+          <div className="mt-4 divide-y divide-bolt-light-5 overflow-hidden rounded-xl border border-bolt-light-5 bg-white">
+            {filteredCustom.map((item) => {
+              const isExpanded = expanded === item.id;
+              const canExpand = item.enabled;
+              return (
+                <div key={item.id}>
+                  <div className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-bolt-light-2">
+                    <button
+                      type="button"
+                      aria-label={`${isExpanded ? '收起' : '展开'} ${item.name} 能力`}
+                      disabled={!canExpand}
+                      onClick={() => canExpand && setExpanded(isExpanded ? null : item.id)}
+                      className={`rounded-md p-1 transition ${canExpand ? 'text-bolt-light-7 hover:bg-bolt-light-4' : 'cursor-default text-bolt-light-5'}`}
+                    >
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-[17px] font-semibold text-violet-600">
+                      {item.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-[14.5px] font-semibold text-bolt-light-12">{item.name}</h3>
+                        <span className={`h-2 w-2 rounded-full ${item.enabled ? 'bg-emerald-500' : 'bg-bolt-light-6'}`} />
+                      </div>
+                      <p className="mt-1 truncate text-[12.5px] text-bolt-light-7">{item.enabled ? `${item.abilities.length} 项能力已启用` : 'Skill'}</p>
+                    </div>
+                    <span className={`w-12 text-right text-[12px] font-medium ${item.enabled ? 'text-emerald-600' : 'text-bolt-light-7'}`}>
+                      {item.enabled ? '已启用' : '未启用'}
+                    </span>
+                    {isExpanded && item.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => deleteSkill(item.id, item.name)}
+                        title="删除自定义 Skill"
+                        aria-label={`删除自定义 Skill ${item.name}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-bolt-light-7 transition hover:bg-red-50 hover:text-bolt-red"
+                      >
+                        <Trash2 className="h-[18px] w-[18px]" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={item.enabled}
+                      aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
+                      onClick={() => toggleSkill(item.id)}
+                      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${item.enabled ? 'bg-emerald-500' : 'bg-bolt-light-6'}`}
+                    >
+                      <span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${item.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                  {isExpanded && item.enabled && (
+                    <div className="border-t border-bolt-light-4 bg-bolt-light-2 px-20 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {item.abilities.map((ability) => (
+                          <span key={ability} className="rounded-md border border-bolt-light-5 bg-white px-2.5 py-1 text-[11.5px] text-bolt-light-9">{ability}</span>
+                        ))}
+                      </div>
+                      <p className="mt-3 truncate text-[11px] text-bolt-light-7">来源：{item.source}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-bolt-light-6 bg-white px-6 py-10 text-center">
+            <p className="text-[13px] font-medium text-bolt-light-9">{query ? '没有找到匹配的自定义 Skill' : '还没有添加自定义 Skill'}</p>
+            {!query && <p className="mt-1 text-[12px] text-bolt-light-7">添加后可在这里启用、停用和查看能力明细。</p>}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function OfficialCapabilityList({ activeTab, search }: { activeTab: Exclude<CapabilityTab, 'mcp'>; search: string }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const items = CAPABILITIES[activeTab].filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()));
   const isComponentTab = activeTab === 'components';
-  const expandedItem = isComponentTab ? items.find((item) => item.id === expandedId) : undefined;
-
-  useEffect(() => setExpandedId(null), [activeTab, search]);
 
   return (
     <section className="mt-8">
@@ -521,13 +693,10 @@ function OfficialCapabilityList({ activeTab, search }: { activeTab: Exclude<Capa
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {items.map((item) => {
           const Icon = item.icon;
-          const expanded = expandedId === item.id;
           return (
             <article
               key={item.id}
-              className={`group rounded-xl border bg-white p-5 text-left transition hover:border-bolt-blue/40 hover:shadow-sm ${
-                expanded ? 'border-bolt-blue ring-2 ring-bolt-blue/10' : 'border-bolt-light-5'
-              }`}
+              className="group rounded-xl border border-bolt-light-5 bg-white p-5 text-left transition hover:border-bolt-blue/40 hover:shadow-sm"
             >
               <div className="flex items-start gap-4">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.accent}`}>
@@ -545,60 +714,14 @@ function OfficialCapabilityList({ activeTab, search }: { activeTab: Exclude<Capa
                 </div>
               </div>
               {isComponentTab && (
-                <>
-                  <div className="mt-4 overflow-hidden rounded-lg border border-bolt-light-4 bg-bolt-light-2 p-3">
-                    <ComponentPreview id={item.id} compact />
-                  </div>
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    aria-controls="component-expanded-preview"
-                    onClick={() => setExpandedId((current) => current === item.id ? null : item.id)}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-bolt-light-5 bg-white px-3 py-2 text-[12px] font-medium text-bolt-light-9 transition hover:border-bolt-blue/40 hover:bg-bolt-blue-light hover:text-bolt-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-blue/30"
-                  >
-                    {expanded ? '收起预览' : '展开预览'}
-                    <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                  </button>
-                </>
+                <div className="mt-4 overflow-hidden rounded-lg border border-bolt-light-4 bg-bolt-light-2 p-3 [&_.recharts-surface:focus]:outline-none">
+                  <ComponentPreview id={item.id} compact />
+                </div>
               )}
             </article>
           );
         })}
       </div>
-
-      {expandedItem && (
-        <div id="component-expanded-preview" className="mt-4 rounded-2xl border border-bolt-light-5 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-[18px] font-semibold text-bolt-light-12">{expandedItem.name}</h3>
-                <span className="rounded-md bg-bolt-blue-light px-2 py-0.5 text-[11px] font-semibold text-bolt-blue">完整示例</span>
-              </div>
-              <p className="mt-1.5 text-[13px] text-bolt-light-8">{expandedItem.description}</p>
-            </div>
-            <button type="button" onClick={() => setExpandedId(null)} className="rounded-lg p-2 text-bolt-light-7 transition hover:bg-bolt-light-3 hover:text-bolt-light-11" aria-label="收起组件示例">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(220px,0.7fr)]">
-            <div className="min-h-[250px] rounded-xl border border-bolt-light-4 bg-bolt-light-2 p-5">
-              <ComponentPreview id={expandedItem.id} />
-            </div>
-            <div className="rounded-xl bg-[#F0F6FF] p-5">
-              <h4 className="text-[13px] font-semibold text-bolt-light-11">使用说明</h4>
-              <ul className="mt-3 space-y-2 text-[12.5px] leading-relaxed text-bolt-light-8">
-                {componentGuidance(expandedItem.id).map((guidance) => (
-                  <li key={guidance} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-bolt-blue" />
-                    <span>{guidance}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 border-t border-blue-100 pt-3 text-[11.5px] leading-relaxed text-bolt-light-7">示例数据仅用于展示组件样式，不构成投资建议。</p>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
@@ -637,21 +760,6 @@ const STACKED_DATA = [
   { name: '2025', 权益: 48, 债券: 37, 其他: 15 },
 ];
 const RADAR_DATA = [{ subject: '收益目标', value: 78 }, { subject: '风险承受', value: 62 }, { subject: '流动性', value: 86 }, { subject: '投资经验', value: 70 }, { subject: '持有耐心', value: 82 }];
-
-function componentGuidance(id: string) {
-  const guidance: Record<string, string[]> = {
-    'conclusion-card': ['用于结论先行的页面结构，建议一次展示2至4个核心指标。', '指标名称、数值与单位应保持清晰层级。'],
-    'status-callout': ['成功、提醒和警示状态必须同时使用文字与颜色表达。', '风险提示应保持可见，不依赖悬停才能阅读。'],
-    'financial-data-table': ['文本列左对齐、数字列右对齐，表格行高不低于字号的1.4倍。', '数据较多时使用轻网格线与隔行底色辅助阅读。'],
-    'return-line-chart': ['只标注期末、峰值与谷值等关键数据点。', '纵轴需明确百分比或净值口径，并注明时间范围。'],
-    'drawdown-area-chart': ['回撤统一使用负数，零线必须清晰可见。', '面积透明度保持克制，避免遮挡网格和数据。'],
-    'asset-allocation-donut': ['扇区不超过6个，其余类别合并为“其他”。', '标签优先展示资产名称和占比。'],
-    'metric-comparison-bar': ['类目不超过8个，超过时应分页或改用横向条形图。', '数值标签仅突出最大值、最小值或期末值。'],
-    'allocation-stacked-bar': ['适用于展示资产或行业占比随时间的变化。', '图例置顶，所有系列使用统一的百分比口径。'],
-    'persona-radar-chart': ['建议使用5至7个维度，并统一使用0至100的量纲。', '雷达面积保持低透明度，避免覆盖网格信息。'],
-  };
-  return guidance[id] ?? ['遵循且慢品牌颜色与8pt间距体系。'];
-}
 
 function ComponentPreview({ id, compact = false }: { id: string; compact?: boolean }) {
   const chartHeight = compact ? 92 : 220;
@@ -875,6 +983,100 @@ function CustomMcpManager({ items, onChange, onClose }: { items: CustomMcp[]; on
             </button>
           </div>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) => void; onClose: () => void }) {
+  const [draftName, setDraftName] = useState('');
+  const [draftSource, setDraftSource] = useState('');
+  const [draftAbilities, setDraftAbilities] = useState('');
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const saveDraft = () => {
+    if (!draftName.trim() || !draftSource.trim()) return;
+    const abilities = draftAbilities
+      .split(/[，,\n]/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    onSave({
+      id: `custom-skill-${Date.now()}`,
+      name: draftName.trim(),
+      source: draftSource.trim(),
+      abilities: abilities.length > 0 ? abilities : ['等待读取 Skill 能力说明'],
+      enabled: false,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-6 py-8" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-custom-skill-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        className="w-full max-w-xl overflow-hidden rounded-2xl border border-bolt-light-5 bg-white shadow-2xl animate-slide-up"
+      >
+        <header className="flex items-start gap-5 border-b border-bolt-light-5 px-7 py-6">
+          <div className="min-w-0 flex-1">
+            <h2 id="add-custom-skill-title" className="text-[20px] font-bold text-bolt-light-12">添加自定义 Skill</h2>
+            <p className="mt-1 text-[13px] text-bolt-light-8">填写 Skill 的名称、来源与能力说明；保存后需手动启用。</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg p-2 text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-12">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+        <div className="space-y-4 px-7 py-6">
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">Skill 名称</span>
+            <input
+              autoFocus
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              placeholder="例如 portfolio-review"
+              className="h-11 w-full rounded-lg border border-bolt-light-5 px-3 text-[13px] outline-none focus:border-bolt-blue"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">来源地址</span>
+            <input
+              value={draftSource}
+              onChange={(event) => setDraftSource(event.target.value)}
+              placeholder="仓库地址、Skill 文件地址或内部来源"
+              className="h-11 w-full rounded-lg border border-bolt-light-5 px-3 text-[13px] outline-none focus:border-bolt-blue"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">能力明细（可选）</span>
+            <textarea
+              value={draftAbilities}
+              onChange={(event) => setDraftAbilities(event.target.value)}
+              placeholder="使用逗号或换行分隔，例如：组合复盘、风险检查、结论生成"
+              rows={3}
+              className="w-full resize-none rounded-lg border border-bolt-light-5 px-3 py-2.5 text-[13px] outline-none focus:border-bolt-blue"
+            />
+          </label>
+        </div>
+        <footer className="flex justify-end gap-3 border-t border-bolt-light-5 px-7 py-4">
+          <button type="button" onClick={onClose} className="h-10 rounded-lg border border-bolt-light-5 px-4 text-[13px] font-medium text-bolt-light-9 hover:bg-bolt-light-2">取消</button>
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={!draftName.trim() || !draftSource.trim()}
+            className="h-10 rounded-lg bg-bolt-blue px-4 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            保存 Skill
+          </button>
+        </footer>
       </section>
     </div>
   );

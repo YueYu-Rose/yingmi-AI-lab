@@ -12,6 +12,7 @@ interface FrontPageProps {
   onViewChange: (view: SidebarView) => void;
   projects: Project[];
   onToggleStar: (id: string) => void;
+  onTogglePin: (id: string) => void;
   onOpenProject: (id: string) => void;
   onNewProject: (prompt: string) => void;
   onRenameProject: (id: string, newName: string) => void;
@@ -30,7 +31,7 @@ const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
 };
 
 
-export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
+export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onTogglePin, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [plazaDetailOpen, setPlazaDetailOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -73,6 +74,10 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
           activeView={activeView}
           onViewChange={onViewChange}
           onOpenProject={onOpenProject}
+          onToggleStar={onToggleStar}
+          onTogglePin={onTogglePin}
+          onRenameProject={onRenameProject}
+          onDeleteProject={onDeleteProject}
           projects={projects}
           compact={sidebarCollapsed}
           onCompactChange={setSidebarCollapsed}
