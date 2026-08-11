@@ -4,7 +4,6 @@ import {
   BadgeCheck,
   BarChart3,
   Bot,
-  Check,
   ChevronDown,
   ChevronUp,
   Compass,
@@ -16,7 +15,6 @@ import {
   PanelsTopLeft,
   PlugZap,
   Search,
-  Share2,
   Smartphone,
   Sparkles,
   Users,
@@ -73,6 +71,25 @@ const mcpCatalog: Record<string, { category: string; description: string }> = {
 };
 
 const initialTemplates: PlazaTemplate[] = [
+  {
+    id: 'qdii-quota-manager',
+    title: '额度管家',
+    author: '王钊灏',
+    category: '基金研究',
+    description: '针对QDII基金单只产品每日申购额度有限的问题，用户输入计划金额后，应用会自动筛选可申购基金、分配买入金额并批量申购；还可设置每日定投持续补齐额度，减少逐只尝试和限购中断。',
+    cover: '/plaza/qdii-quota-manager.svg',
+    likes: 0,
+    views: 0,
+    sourceUrl: 'https://qieman.com/mix-pay/qdii-calculator?source=home_shortcuts',
+    accent: 'blue',
+    supportedDevices: ['desktop', 'mobile'],
+    tools: {
+      MCP: ['搜索基金', '批量获取基金详情', '基金交易限制信息'],
+      Skills: [],
+      Agent: [],
+      组件: ['额度状态表', '金额分配器', '定投计划'],
+    },
+  },
   {
     id: 'nasdaq-butler',
     title: '纳指管家',
@@ -377,7 +394,6 @@ function TemplateDetail({
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const [activeTool, setActiveTool] = useState<ToolKind>('MCP');
   const [followed, setFollowed] = useState(false);
-  const [shared, setShared] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
 
   useLayoutEffect(() => {
@@ -395,15 +411,6 @@ function TemplateDetail({
     observer.observe(description);
     return () => observer.disconnect();
   }, [template.description]);
-
-  const share = async () => {
-    try {
-      await navigator.clipboard?.writeText(window.location.href);
-    } finally {
-      setShared(true);
-      window.setTimeout(() => setShared(false), 1600);
-    }
-  };
 
   return (
     <main className="min-h-full px-8 py-10 animate-fade-in">
@@ -439,9 +446,11 @@ function TemplateDetail({
               <button type="button" onClick={onToggleLike} aria-pressed={liked} className={`inline-flex items-center gap-1.5 transition hover:text-bolt-red ${liked ? 'text-bolt-red' : ''}`}>
                 <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} /> {formatCount(template.likes)}
               </button>
-              <button type="button" onClick={share} className="inline-flex items-center gap-1.5 transition hover:text-bolt-blue">
-                {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />} {shared ? '已复制' : '分享'}
-              </button>
+              {template.sourceUrl && (
+                <a href={template.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 transition hover:text-bolt-blue" title="访问原应用">
+                  <Compass className="h-4 w-4" /> 访问
+                </a>
+              )}
               <span className="inline-flex items-center gap-1.5"><Eye className="h-4 w-4" /> {formatCount(template.views)}</span>
               <button
                 type="button"
@@ -462,7 +471,9 @@ function TemplateDetail({
                 ))}
               </div>
               <div className="mt-4 divide-y divide-bolt-light-4 overflow-hidden rounded-xl border border-bolt-light-4 bg-white">
-                {template.tools[activeTool].map((tool) => (
+                {template.tools[activeTool].length === 0 ? (
+                  <div className="px-4 py-5 text-center text-[11.5px] text-bolt-light-7">该应用未使用{activeTool}</div>
+                ) : template.tools[activeTool].map((tool) => (
                   <div key={tool} className="px-4 py-3.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[12.5px] font-semibold text-bolt-light-11">{tool}</span>
@@ -510,18 +521,6 @@ function TemplateDetail({
                       <Smartphone className="h-4 w-4" />
                     </button>
                   </div>
-                  {template.sourceUrl && (
-                    <a
-                      href={template.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="在新标签页打开原应用"
-                      aria-label="在新标签页打开原应用"
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-bolt-light-5 bg-white text-bolt-light-9 shadow-sm transition hover:border-bolt-blue hover:text-bolt-blue"
-                    >
-                      <Compass className="h-[18px] w-[18px]" />
-                    </a>
-                  )}
                 </div>
               </div>
 
@@ -656,7 +655,9 @@ function InteractiveTemplatePreview({
               <section key={id} className="rounded-xl border border-bolt-light-5 p-4">
                 <h4 className="flex items-center gap-2 text-[13px] font-semibold text-bolt-light-11"><Icon className={`h-4 w-4 ${accentText}`} /> {id}</h4>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {template.tools[id].map((tool) => (
+                  {template.tools[id].length === 0 ? (
+                    <span className="text-[11px] text-bolt-light-7">未使用</span>
+                  ) : template.tools[id].map((tool) => (
                     <button key={tool} type="button" className="rounded-lg bg-bolt-light-2 px-3 py-2 text-[11px] text-bolt-light-9 transition hover:bg-bolt-light-4">{tool}</button>
                   ))}
                 </div>

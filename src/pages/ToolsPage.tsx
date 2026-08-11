@@ -1,6 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart as RechartsBarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart as RechartsLineChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar as RechartsRadar,
+  RadarChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
   ArrowRight,
   BarChart3,
   BookOpen,
@@ -228,7 +247,7 @@ export default function ToolsPage() {
         <header>
           <h1 className="text-[30px] font-bold tracking-tight text-bolt-light-12">能力中心</h1>
           <p className="mt-2 text-[14px] text-bolt-light-8">
-            官方能力默认可用，智能体会根据任务自动调用。
+            集中浏览平台能力与组件示例，实际可用状态以接入配置为准。
           </p>
         </header>
 
@@ -262,7 +281,7 @@ export default function ToolsPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={activeTab === 'mcp' ? '搜索官方与自定义 MCP' : `搜索 ${TABS.find((tab) => tab.id === activeTab)?.label} 能力`}
+                placeholder={activeTab === 'mcp' ? '搜索官方与自定义MCP' : `搜索${TABS.find((tab) => tab.id === activeTab)?.label}能力`}
                 className="h-10 w-[280px] rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-11 outline-none transition focus:border-bolt-blue"
               />
             </label>
@@ -484,34 +503,194 @@ function McpCapabilityView({
 }
 
 function OfficialCapabilityList({ activeTab, search }: { activeTab: Exclude<CapabilityTab, 'mcp'>; search: string }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const items = CAPABILITIES[activeTab].filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const isComponentTab = activeTab === 'components';
+  const expandedItem = isComponentTab ? items.find((item) => item.id === expandedId) : undefined;
+
+  useEffect(() => setExpandedId(null), [activeTab, search]);
 
   return (
     <section className="mt-8">
-      <h2 className="text-[16px] font-semibold text-bolt-light-11">平台内置能力</h2>
+      <div>
+        <h2 className="text-[16px] font-semibold text-bolt-light-11">{isComponentTab ? '设计组件' : '平台能力示例'}</h2>
+        {isComponentTab && (
+          <p className="mt-1 text-[12.5px] text-bolt-light-7">预览且慢设计规范中的常用金融组件，点击卡片查看完整示例。</p>
+        )}
+      </div>
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {items.map((item) => {
           const Icon = item.icon;
+          const expanded = expandedId === item.id;
           return (
-            <button key={item.id} type="button" className="group flex items-center gap-4 rounded-xl border border-bolt-light-5 bg-white px-5 py-5 text-left transition hover:border-bolt-blue/40 hover:shadow-sm">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.accent}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{item.name}</h3>
-                  <span className="rounded-md bg-bolt-blue-light px-2 py-0.5 text-[10.5px] font-semibold text-bolt-blue">自动调用</span>
+            <article
+              key={item.id}
+              className={`group rounded-xl border bg-white p-5 text-left transition hover:border-bolt-blue/40 hover:shadow-sm ${
+                expanded ? 'border-bolt-blue ring-2 ring-bolt-blue/10' : 'border-bolt-light-5'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.accent}`}>
+                  <Icon className="h-5 w-5" />
                 </div>
-                <p className="mt-1.5 text-[12.5px] leading-relaxed text-bolt-light-8">{item.description}</p>
-                <p className="mt-2 text-[11.5px] text-bolt-light-7">{item.meta}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{item.name}</h3>
+                    <span className="rounded-md bg-bolt-blue-light px-2 py-0.5 text-[10.5px] font-semibold text-bolt-blue">
+                      {isComponentTab ? '组件示例' : '能力示例'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-bolt-light-8">{item.description}</p>
+                  <p className="mt-2 text-[11.5px] text-bolt-light-7">{item.meta}</p>
+                </div>
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-bolt-light-7 transition-transform group-hover:translate-x-0.5 group-hover:text-bolt-blue" />
-            </button>
+              {isComponentTab && (
+                <>
+                  <div className="mt-4 overflow-hidden rounded-lg border border-bolt-light-4 bg-bolt-light-2 p-3">
+                    <ComponentPreview id={item.id} compact />
+                  </div>
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls="component-expanded-preview"
+                    onClick={() => setExpandedId((current) => current === item.id ? null : item.id)}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-bolt-light-5 bg-white px-3 py-2 text-[12px] font-medium text-bolt-light-9 transition hover:border-bolt-blue/40 hover:bg-bolt-blue-light hover:text-bolt-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bolt-blue/30"
+                  >
+                    {expanded ? '收起预览' : '展开预览'}
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
+                </>
+              )}
+            </article>
           );
         })}
       </div>
+
+      {expandedItem && (
+        <div id="component-expanded-preview" className="mt-4 rounded-2xl border border-bolt-light-5 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[18px] font-semibold text-bolt-light-12">{expandedItem.name}</h3>
+                <span className="rounded-md bg-bolt-blue-light px-2 py-0.5 text-[11px] font-semibold text-bolt-blue">完整示例</span>
+              </div>
+              <p className="mt-1.5 text-[13px] text-bolt-light-8">{expandedItem.description}</p>
+            </div>
+            <button type="button" onClick={() => setExpandedId(null)} className="rounded-lg p-2 text-bolt-light-7 transition hover:bg-bolt-light-3 hover:text-bolt-light-11" aria-label="收起组件示例">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(220px,0.7fr)]">
+            <div className="min-h-[250px] rounded-xl border border-bolt-light-4 bg-bolt-light-2 p-5">
+              <ComponentPreview id={expandedItem.id} />
+            </div>
+            <div className="rounded-xl bg-[#F0F6FF] p-5">
+              <h4 className="text-[13px] font-semibold text-bolt-light-11">使用说明</h4>
+              <ul className="mt-3 space-y-2 text-[12.5px] leading-relaxed text-bolt-light-8">
+                {componentGuidance(expandedItem.id).map((guidance) => (
+                  <li key={guidance} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-bolt-blue" />
+                    <span>{guidance}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 border-t border-blue-100 pt-3 text-[11.5px] leading-relaxed text-bolt-light-7">示例数据仅用于展示组件样式，不构成投资建议。</p>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+const CHART_COLORS = ['#69B1F4', '#F88D72', '#FBCA74', '#7DD4C4', '#68E0F3', '#ADAFE8'];
+const TREND_DATA = [
+  { period: '1月', portfolio: 100, benchmark: 100 },
+  { period: '2月', portfolio: 104, benchmark: 102 },
+  { period: '3月', portfolio: 102, benchmark: 103 },
+  { period: '4月', portfolio: 109, benchmark: 106 },
+  { period: '5月', portfolio: 113, benchmark: 108 },
+  { period: '6月', portfolio: 118, benchmark: 111 },
+];
+const DRAWDOWN_DATA = [
+  { period: '1月', value: 0 },
+  { period: '2月', value: -2.1 },
+  { period: '3月', value: -5.4 },
+  { period: '4月', value: -3.2 },
+  { period: '5月', value: -7.2 },
+  { period: '6月', value: -2.6 },
+];
+const ALLOCATION_DATA = [
+  { name: '权益基金', value: 48 },
+  { name: '债券基金', value: 27 },
+  { name: '黄金商品', value: 15 },
+  { name: '现金类', value: 10 },
+];
+const COMPARE_DATA = [
+  { name: '收益', 组合A: 18, 组合B: 14 },
+  { name: '波动', 组合A: 12, 组合B: 9 },
+  { name: '回撤', 组合A: 8, 组合B: 6 },
+];
+const STACKED_DATA = [
+  { name: '2023', 权益: 45, 债券: 35, 其他: 20 },
+  { name: '2024', 权益: 52, 债券: 31, 其他: 17 },
+  { name: '2025', 权益: 48, 债券: 37, 其他: 15 },
+];
+const RADAR_DATA = [{ subject: '收益目标', value: 78 }, { subject: '风险承受', value: 62 }, { subject: '流动性', value: 86 }, { subject: '投资经验', value: 70 }, { subject: '持有耐心', value: 82 }];
+
+function componentGuidance(id: string) {
+  const guidance: Record<string, string[]> = {
+    'conclusion-card': ['用于结论先行的页面结构，建议一次展示2至4个核心指标。', '指标名称、数值与单位应保持清晰层级。'],
+    'status-callout': ['成功、提醒和警示状态必须同时使用文字与颜色表达。', '风险提示应保持可见，不依赖悬停才能阅读。'],
+    'financial-data-table': ['文本列左对齐、数字列右对齐，表格行高不低于字号的1.4倍。', '数据较多时使用轻网格线与隔行底色辅助阅读。'],
+    'return-line-chart': ['只标注期末、峰值与谷值等关键数据点。', '纵轴需明确百分比或净值口径，并注明时间范围。'],
+    'drawdown-area-chart': ['回撤统一使用负数，零线必须清晰可见。', '面积透明度保持克制，避免遮挡网格和数据。'],
+    'asset-allocation-donut': ['扇区不超过6个，其余类别合并为“其他”。', '标签优先展示资产名称和占比。'],
+    'metric-comparison-bar': ['类目不超过8个，超过时应分页或改用横向条形图。', '数值标签仅突出最大值、最小值或期末值。'],
+    'allocation-stacked-bar': ['适用于展示资产或行业占比随时间的变化。', '图例置顶，所有系列使用统一的百分比口径。'],
+    'persona-radar-chart': ['建议使用5至7个维度，并统一使用0至100的量纲。', '雷达面积保持低透明度，避免覆盖网格信息。'],
+  };
+  return guidance[id] ?? ['遵循且慢品牌颜色与8pt间距体系。'];
+}
+
+function ComponentPreview({ id, compact = false }: { id: string; compact?: boolean }) {
+  const chartHeight = compact ? 92 : 220;
+  const axisProps = compact ? { tick: false, axisLine: false, tickLine: false } : { tick: { fontSize: 11, fill: '#999999' }, axisLine: false, tickLine: false };
+
+  if (id === 'conclusion-card') {
+    const metrics = [['组合健康度', '82 / 100'], ['持仓基金', '4只'], ['最大回撤', '-7.2%'], ['平均相关性', '0.63']];
+    return <div className={`grid grid-cols-2 gap-2 ${compact ? '' : 'sm:grid-cols-4'}`}>{metrics.map(([label, value]) => <div key={label} className="rounded-lg border border-bolt-light-4 bg-white p-3"><p className="text-[10.5px] text-bolt-light-7">{label}</p><p className={`${compact ? 'mt-1 text-[14px]' : 'mt-2 text-[22px]'} font-semibold text-bolt-light-12`}>{value}</p></div>)}</div>;
+  }
+
+  if (id === 'status-callout') {
+    return <div className="space-y-2"><div className="rounded-lg bg-emerald-50 px-3 py-2 text-[11.5px] text-emerald-700">组合分散度处于合理区间</div><div className="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">权益资产比例接近建议上限</div>{!compact && <div className="rounded-lg bg-[#FEEDE9] px-3 py-2 text-[11.5px] text-[#FA440C]">近一年最大回撤超过目标范围</div>}</div>;
+  }
+
+  if (id === 'financial-data-table') {
+    return <div className="overflow-hidden rounded-lg border border-bolt-light-4 bg-white"><table className="w-full text-[11px]"><thead className="bg-bolt-light-3 text-bolt-light-8"><tr><th className="px-3 py-2 text-left font-medium">资产</th><th className="px-3 py-2 text-right font-medium">占比</th><th className="px-3 py-2 text-right font-medium">区间收益</th></tr></thead><tbody>{[['权益基金','48%','12.6%'],['债券基金','27%','3.8%'],['黄金商品','15%','8.1%']].slice(0, compact ? 2 : 3).map((row, index) => <tr key={row[0]} className={index % 2 ? 'bg-bolt-light-2' : 'bg-white'}><td className="px-3 py-2 text-bolt-light-10">{row[0]}</td><td className="px-3 py-2 text-right text-bolt-light-9">{row[1]}</td><td className="px-3 py-2 text-right text-bolt-light-9">{row[2]}</td></tr>)}</tbody></table></div>;
+  }
+
+  if (id === 'return-line-chart') {
+    return <div style={{ height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><RechartsLineChart data={TREND_DATA} margin={{ top: 8, right: 8, bottom: 0, left: compact ? 0 : 4 }}><CartesianGrid stroke="#D8D8D8" strokeOpacity={0.35} vertical={false} /><XAxis dataKey="period" {...axisProps} /><YAxis hide={compact} tick={{ fontSize: 11, fill: '#999999' }} axisLine={false} tickLine={false} /><Line type="monotone" dataKey="portfolio" stroke={CHART_COLORS[0]} strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="benchmark" stroke={CHART_COLORS[5]} strokeWidth={2} dot={false} /></RechartsLineChart></ResponsiveContainer></div>;
+  }
+
+  if (id === 'drawdown-area-chart') {
+    return <div style={{ height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><AreaChart data={DRAWDOWN_DATA} margin={{ top: 8, right: 8, bottom: 0, left: compact ? 0 : 4 }}><CartesianGrid stroke="#D8D8D8" strokeOpacity={0.35} vertical={false} /><XAxis dataKey="period" {...axisProps} /><YAxis hide={compact} tick={{ fontSize: 11, fill: '#999999' }} axisLine={false} tickLine={false} /><Area type="monotone" dataKey="value" stroke={CHART_COLORS[1]} fill={CHART_COLORS[1]} fillOpacity={0.2} strokeWidth={2} /></AreaChart></ResponsiveContainer></div>;
+  }
+
+  if (id === 'asset-allocation-donut') {
+    return <div className="flex items-center gap-3"><div style={{ width: compact ? 110 : 210, height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><RechartsPieChart><Pie data={ALLOCATION_DATA} dataKey="value" nameKey="name" innerRadius={compact ? 26 : 55} outerRadius={compact ? 42 : 88} paddingAngle={2}>{ALLOCATION_DATA.map((entry, index) => <Cell key={entry.name} fill={CHART_COLORS[index]} />)}</Pie></RechartsPieChart></ResponsiveContainer></div><div className="space-y-1.5">{ALLOCATION_DATA.slice(0, compact ? 3 : 4).map((entry, index) => <div key={entry.name} className="flex items-center gap-2 text-[11px] text-bolt-light-8"><span className="h-2 w-2 rounded-full" style={{ background: CHART_COLORS[index] }} /><span>{entry.name} {entry.value}%</span></div>)}</div></div>;
+  }
+
+  if (id === 'metric-comparison-bar') {
+    return <div style={{ height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><RechartsBarChart data={COMPARE_DATA} margin={{ top: 8, right: 8, bottom: 0, left: compact ? 0 : 4 }}><CartesianGrid stroke="#D8D8D8" strokeOpacity={0.35} vertical={false} /><XAxis dataKey="name" {...axisProps} /><YAxis hide={compact} axisLine={false} tickLine={false} /><Bar dataKey="组合A" fill={CHART_COLORS[0]} radius={[3,3,0,0]} /><Bar dataKey="组合B" fill={CHART_COLORS[2]} radius={[3,3,0,0]} /></RechartsBarChart></ResponsiveContainer></div>;
+  }
+
+  if (id === 'allocation-stacked-bar') {
+    return <div style={{ height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><RechartsBarChart data={STACKED_DATA} margin={{ top: 8, right: 8, bottom: 0, left: compact ? 0 : 4 }}><CartesianGrid stroke="#D8D8D8" strokeOpacity={0.35} vertical={false} /><XAxis dataKey="name" {...axisProps} /><YAxis hide={compact} axisLine={false} tickLine={false} /><Bar dataKey="权益" stackId="total" fill={CHART_COLORS[0]} /><Bar dataKey="债券" stackId="total" fill={CHART_COLORS[3]} /><Bar dataKey="其他" stackId="total" fill={CHART_COLORS[2]} radius={[3,3,0,0]} /></RechartsBarChart></ResponsiveContainer></div>;
+  }
+
+  return <div style={{ height: chartHeight }}><ResponsiveContainer width="100%" height="100%"><RadarChart data={RADAR_DATA} outerRadius={compact ? '70%' : '76%'}><PolarGrid stroke="#D8D8D8" /><PolarAngleAxis dataKey="subject" tick={compact ? false : { fontSize: 11, fill: '#606060' }} /><RechartsRadar dataKey="value" stroke={CHART_COLORS[0]} fill={CHART_COLORS[0]} fillOpacity={0.16} strokeWidth={2} /></RadarChart></ResponsiveContainer></div>;
 }
 
 function CustomMcpManager({ items, onChange, onClose }: { items: CustomMcp[]; onChange: (items: CustomMcp[]) => void; onClose: () => void }) {
