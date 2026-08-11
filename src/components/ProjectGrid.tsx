@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Star, MoreHorizontal, FolderKanban, Clock, Users, LifeBuoy, Sparkles, Pencil, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
+import { Star, MoreHorizontal, FolderKanban, Clock, Users, CircleHelp, Sparkles, Pencil, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
 import type { SidebarView, Project } from '@/types';
 
 interface ProjectGridProps {
@@ -22,7 +22,7 @@ function getViewConfig(view: SidebarView): { title: string; subtitle: string; ic
     case 'shared':
       return { title: '共享给你的', subtitle: '他人共享给你的项目', icon: Users };
     case 'help':
-      return { title: '帮助中心', subtitle: '查找指南、教程和答案', icon: LifeBuoy };
+      return { title: '帮助中心', subtitle: '查找指南、教程和答案', icon: CircleHelp };
     default:
       return { title: '主页', subtitle: '你的构建工作区', icon: Sparkles };
   }
@@ -111,7 +111,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
       <div className="max-w-4xl mx-auto p-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-xl bg-bolt-blue-light flex items-center justify-center">
-            <LifeBuoy className="w-5 h-5 text-bolt-blue" />
+            <CircleHelp className="w-5 h-5 text-bolt-blue" strokeWidth={2} />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-bolt-light-12">帮助中心</h2>

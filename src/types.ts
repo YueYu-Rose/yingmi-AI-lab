@@ -1,6 +1,6 @@
 export type Page = 'home' | 'design';
 
-export type SidebarView = 'home' | 'tools' | 'workspace' | 'starred' | 'recent' | 'shared' | 'help';
+export type SidebarView = 'home' | 'tools' | 'plaza' | 'workspace' | 'starred' | 'recent' | 'shared' | 'help';
 
 export interface Project {
   id: string;

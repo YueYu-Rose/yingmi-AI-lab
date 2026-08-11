@@ -1,12 +1,13 @@
 import {
   Home,
+  CircleHelp,
+  CirclePlus,
   FolderKanban,
   Star,
-  LifeBuoy,
   ChevronDown,
   Search,
-  Sparkles,
   Wrench,
+  LayoutGrid,
   MessageCircle,
   UserSquare2,
   LogOut,
@@ -20,15 +21,17 @@ interface SidebarProps {
   onViewChange: (view: SidebarView) => void;
   onOpenProject: (id: string) => void;
   projects: Project[];
+  compact?: boolean;
 }
 
 const navItems: { id: SidebarView; label: string; icon: typeof Home }[] = [
-  { id: 'home', label: '开始创建', icon: Sparkles },
+  { id: 'home', label: '开始创建', icon: CirclePlus },
   { id: 'tools', label: '盈米工具', icon: Wrench },
+  { id: 'plaza', label: '应用广场', icon: LayoutGrid },
   { id: 'workspace', label: '工作空间', icon: FolderKanban },
 ];
 
-export default function Sidebar({ activeView, onViewChange, onOpenProject, projects }: SidebarProps) {
+export default function Sidebar({ activeView, onViewChange, onOpenProject, projects, compact = false }: SidebarProps) {
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -73,22 +76,22 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
     : personalProjects.slice(0, 8);
 
   return (
-    <aside className="w-[260px] shrink-0 border-r border-bolt-light-5 bg-bolt-light flex flex-col h-full">
+    <aside className={`${compact ? 'w-16' : 'w-[260px]'} shrink-0 border-r border-bolt-light-5 bg-bolt-light flex flex-col h-full transition-[width] duration-200`}>
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-bolt-light-5">
+      <div className={`h-14 flex items-center border-b border-bolt-light-5 ${compact ? 'justify-center px-2' : 'px-4'}`}>
         <div className="flex items-center gap-2">
           <img src="/yimi-logo.png" alt="盈米" className="w-9 h-9 object-contain shrink-0" />
-          <span className="font-semibold text-bolt-light-12 text-[15px]">盈米实验室</span>
+          {!compact && <span className="font-semibold text-bolt-light-12 text-[15px]">盈米实验室</span>}
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3">
-        <div className="mb-1 px-2">
+      <nav className={`flex-1 ${compact ? 'overflow-visible px-2 py-3' : 'overflow-y-auto p-3'}`}>
+        {!compact && <div className="mb-1 px-2">
           <span className="text-[11px] font-medium text-bolt-light-7 tracking-wider">
             导航
           </span>
-        </div>
+        </div>}
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = activeView === item.id;
@@ -96,20 +99,31 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13.5px] font-medium mb-0.5 transition-all duration-150 ${
+              title={compact ? item.label : undefined}
+              aria-label={item.label}
+              className={`group relative w-full flex items-center rounded-lg text-[13.5px] font-medium mb-1 transition-all duration-150 ${compact ? 'justify-center p-2.5' : 'gap-3 px-2.5 py-2'} ${
                 active
                   ? 'bg-bolt-light-4 text-bolt-light-12'
                   : 'text-bolt-light-9 hover:bg-bolt-light-3 hover:text-bolt-light-11'
               }`}
             >
-              <Icon className={`w-[18px] h-[18px] ${active ? 'text-bolt-blue' : ''}`} />
-              {item.label}
+              <Icon
+                aria-hidden="true"
+                strokeWidth={2}
+                className={`h-[18px] w-[18px] shrink-0 transition-colors duration-150 ${active ? 'text-bolt-blue' : ''}`}
+              />
+              {!compact && item.label}
+              {compact && (
+                <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  {item.label}
+                </span>
+              )}
             </button>
           );
         })}
 
         {/* Recent chats and projects */}
-        <div
+        {!compact && <div
           ref={searchAreaRef}
           data-testid="workspace-recent-header"
           className="mt-5 mb-1 px-2 min-h-7 flex items-center gap-2"
@@ -149,9 +163,9 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
               </button>
             </div>
           )}
-        </div>
+        </div>}
 
-        {filteredPersonal.length === 0 ? (
+        {!compact && (filteredPersonal.length === 0 ? (
           <div className="px-2.5 py-3 text-[12px] text-bolt-light-7 text-center">
             {search.trim() ? '未找到匹配内容' : '暂无最近内容'}
           </div>
@@ -176,50 +190,68 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
               </button>
             );
           })
-        )}
+        ))}
 
         {/* Help Center */}
-        <div className="mt-5 mb-1 px-2">
+        {!compact && <div className="mt-5 mb-1 px-2">
           <span className="text-[11px] font-medium text-bolt-light-7 tracking-wider">
             支持
           </span>
-        </div>
+        </div>}
         <button
           onClick={() => onViewChange('help')}
-          className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13.5px] font-medium mb-0.5 transition-all duration-150 ${
+          title={compact ? '帮助中心' : undefined}
+          aria-label="帮助中心"
+          className={`group relative w-full flex items-center rounded-lg text-[13.5px] font-medium mb-0.5 transition-all duration-150 ${compact ? 'mt-4 justify-center p-2.5' : 'gap-3 px-2.5 py-2'} ${
             activeView === 'help'
               ? 'bg-bolt-light-4 text-bolt-light-12'
               : 'text-bolt-light-9 hover:bg-bolt-light-3 hover:text-bolt-light-11'
           }`}
         >
-          <LifeBuoy className={`w-[18px] h-[18px] ${activeView === 'help' ? 'text-bolt-blue' : ''}`} />
-          帮助中心
+          <CircleHelp
+            aria-hidden="true"
+            strokeWidth={2}
+            className={`h-[18px] w-[18px] shrink-0 transition-colors duration-150 ${activeView === 'help' ? 'text-bolt-blue' : ''}`}
+          />
+          {!compact && '帮助中心'}
+          {compact && (
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              帮助中心
+            </span>
+          )}
         </button>
       </nav>
 
       {/* User profile */}
-      <div className="relative p-3 border-t border-bolt-light-5" ref={profileMenuRef}>
+      <div className={`relative border-t border-bolt-light-5 ${compact ? 'p-2' : 'p-3'}`} ref={profileMenuRef}>
         <button
           type="button"
           aria-expanded={profileMenuOpen}
           aria-haspopup="menu"
           onClick={() => setProfileMenuOpen((open) => !open)}
-          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white hover:bg-bolt-light-2 transition-colors duration-150"
+          title={compact ? displayName : undefined}
+          aria-label={compact ? `用户：${displayName}` : undefined}
+          className={`group relative w-full flex items-center rounded-lg bg-white hover:bg-bolt-light-2 transition-colors duration-150 ${compact ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5'}`}
         >
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-bolt-blue to-bolt-purple flex items-center justify-center text-white text-xs font-semibold">
             JD
           </div>
-          <div className="flex-1 text-left min-w-0">
+          {!compact && <div className="flex-1 text-left min-w-0">
             <div className="text-[13px] font-medium text-bolt-light-12 truncate">{displayName}</div>
             <div className="text-[11px] text-bolt-light-7 truncate">免费版</div>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-bolt-light-7 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
+          </div>}
+          {!compact && <ChevronDown className={`w-4 h-4 text-bolt-light-7 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />}
+          {compact && (
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              {displayName}
+            </span>
+          )}
         </button>
 
         {profileMenuOpen && (
           <div
             role="menu"
-            className="absolute bottom-[calc(100%-4px)] left-3 right-3 z-40 overflow-hidden rounded-xl border border-bolt-light-5 bg-white shadow-xl animate-fade-in"
+            className={`absolute bottom-[calc(100%-4px)] z-40 overflow-hidden rounded-xl border border-bolt-light-5 bg-white shadow-xl animate-fade-in ${compact ? 'left-2 w-48' : 'left-3 right-3'}`}
           >
             <button
               type="button"

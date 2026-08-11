@@ -146,4 +146,98 @@
 - build validation: `npm run build` passed on 2026-08-06.
 - browser-rendered evidence and console check: blocked，因为当前会话没有可调用的 in-app Browser/Playwright 工具。
 
+## Navigation And Capability Icon Update
+
+- source visual truth paths:
+  - `C:\Users\user1\Downloads\创建.png`（200 × 200 px，RGBA）
+  - `C:\Users\user1\Downloads\帮助.png`（200 × 200 px，RGBA）
+  - `C:\Users\user1\Downloads\IMS_sidebar_MCP.png`（200 × 200 px，RGBA）
+- implementation screenshot path: unavailable in this Codex session
+- intended state: 左侧“开始创建”使用圆形加号图标；“帮助中心”使用圆形问号图标；具体项目顶部“能力”标签使用带星光的连接器图标。
+- asset fidelity: 圆形加号与圆形问号采用现有 Lucide 图标库中与参考外形匹配的 `CirclePlus` / `CircleHelp`，从而与同级导航保持一致的矢量清晰度和线宽；自定义 MCP 轮廓继续使用用户提供的透明 PNG，并通过其 alpha 轮廓继承当前颜色，没有裁切或拉伸。
+- fonts and typography: 未修改。
+- spacing and layout rhythm: 沿用现有导航 `gap-3` 与项目标签 `gap-1.5`，图标槽位尺寸保持不变。
+- colors and visual tokens: 三个导航项共用 `text-bolt-light-9`、hover 文本色和选中态 `text-bolt-blue`；能力图标使用 `bg-current` 跟随“预览 / 代码 / 能力”标签的文字色。
+- copy and content: 未修改。
+- build validation: `npm run build` passed on 2026-08-10.
+- full-view and focused comparison evidence: blocked；当前 Codex Desktop 会话没有可调用的 in-app Browser 工具，不能捕获实现截图并与三张参考图放入同一比较输入。
+- primary interactions and console errors checked: blocked for the same reason.
+- remaining verification: 在首页确认开始创建与帮助中心图标，在任一具体项目顶部确认“能力”图标，并检查三者的 hover / selected 状态。
+- comparison history:
+  - Pass 1（用户可见反馈）：开始创建和帮助中心直接缩放灰色 PNG，18 px 下笔画比同级 Lucide 图标更浅，且颜色被写死，不能响应 hover / selected，属于 P2 视觉和状态一致性问题。
+  - Fix：开始创建与帮助中心改用同一图标库、18 px 尺寸、2 px 线宽和 `transition-colors duration-150`；能力图标改为用原 PNG alpha 轮廓继承 `currentColor`。
+  - Post-fix code/build evidence：`npm run build` passed on 2026-08-10；浏览器截图与实际状态点击仍因缺少 in-app Browser 控制工具而 blocked。
+
+## Help Center Header Icon Follow-up
+
+- source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-a4e6003d-e13d-49f9-bfd2-5f1fb7bcfe83.png`（320 × 95 px）
+- implementation screenshot path: unavailable in this Codex session
+- intended state: 帮助中心页面标题区域在浅蓝色圆角容器内显示蓝色圆形问号，与左侧导航中的帮助图标使用同一造型语言。
+- findings and comparison history:
+  - Pass 1（用户可见反馈）：仅修改了 `Sidebar`，`ProjectGrid` 的帮助中心页面仍使用 `LifeBuoy`，导致同一功能在导航和页面标题中出现两种图标，属于 P2 一致性问题。
+  - Fix：将 `ProjectGrid` 的帮助配置和页面标题图标统一为 `CircleHelp`，保持参考图中的圆形问号轮廓，并沿用现有 20 px、蓝色前景和浅蓝色 40 px 容器。
+  - Post-fix code/build evidence：`npm run build` passed on 2026-08-10。
+- fonts and typography: 标题、辅助文案及字号未修改。
+- spacing and layout rhythm: 图标容器、标题间距和页面结构未修改。
+- colors and visual tokens: 沿用 `bg-bolt-blue-light` 与 `text-bolt-blue`。
+- image quality and icon fidelity: 使用现有图标库中的矢量 `CircleHelp`，避免把参考截图作为页面图片嵌入。
+- copy and content: 未修改。
+- browser-rendered evidence, primary interactions, console errors, full-view and focused comparison: blocked；当前会话无可调用的 in-app Browser 控制工具。
+
+## Yingmi Tools Header CTA Removal
+
+- source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-ccfe2f10-3901-4a5e-b607-1a09a698fa36.png`（166 × 103 px）
+- implementation screenshot path: unavailable in this Codex session
+- intended state: 盈米工具页面头部不再显示蓝色“开始创建”按钮，其他标题、介绍、分类标签与能力内容保持不变。
+- implementation evidence: 删除 `ToolsPage` 中 CTA 按钮、`onStartCreating` prop 和 `FrontPage` 中对应回调传递；保留用于市场外链的 `ArrowRight` 图标。
+- fonts and typography: 未修改。
+- spacing and layout rhythm: 仅移除 CTA，头部保留原有标题宽度、间距与对齐。
+- colors and visual tokens: 未修改。
+- image quality and asset fidelity: 本次没有新增或替换图片资源。
+- copy and content: 仅删除按钮文案“开始创建”。
+- build validation: `npm run build` passed on 2026-08-10.
+- browser-rendered evidence, primary interactions, console errors, full-view and focused comparison: blocked；当前会话无可调用的 in-app Browser 控制工具。
+
+final result: blocked
+
+## Application Plaza Header Alignment Follow-up
+
+- source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-ccd253f4-6efe-4a02-a0b1-cd4541a8ebe7.png`（1539 × 902 px）
+- implementation screenshot path: unavailable in this Codex session.
+- intended viewport/state: desktop application plaza list, default query state.
+- implementation evidence: 广场列表页改用与盈米工具一致的 `px-8 py-10`、`max-w-5xl` 无外层卡片骨架；删除全部分类 tabs；搜索框移动到标题说明右侧，并保留响应式窄屏换行。
+- fonts and typography: 标题统一为现有一级页面的 30 px 粗体，说明文字统一为 14 px 与 `leading-relaxed`。
+- spacing and layout rhythm: 标题区采用与参考页一致的最大宽度和顶部留白；搜索框占用原右侧 CTA 位置；模板网格直接位于标题区下方。
+- colors and visual tokens: 沿用现有页面背景、文本层级和搜索框边框 token，没有增加独立白色卡片背景。
+- image quality and asset fidelity: 模板缩略图资源未修改，未新增占位资产或代码绘图。
+- copy and content: 删除“全部 / 基金研究 / 组合诊断 / 市场内容 / 财富规划”控制；空状态操作改为“清除搜索”。
+- build validation: `npm run build` passed on 2026-08-10.
+- full-view/focused comparison evidence, interactions and console errors: blocked；当前会话没有可调用的浏览器截图与点击控制工具，无法将实现截图和参考图置于同一比较输入。
+- remaining verification: 刷新应用广场，确认页面没有外层卡片、没有分类 tabs，搜索框位于标题区右侧。
+
+final result: blocked
+
+## Application Plaza And Template Detail
+
+- source visual truth paths:
+  - `C:\Users\user1\AppData\Local\Temp\codex-clipboard-db14fb74-2f0c-426a-aa70-c365eedf1e83.png`（应用广场列表页）
+  - `C:\Users\user1\AppData\Local\Temp\codex-clipboard-000dcf79-e748-4944-9036-28a0c31bd303.png`（具体模板详情页）
+- implementation screenshot path: unavailable in this Codex session.
+- intended viewport/state: 桌面端 1440 px 宽；应用广场默认列表、分类筛选、搜索、发布弹窗，以及模板详情默认状态。
+- implementation evidence:
+  - 新增一级导航“应用广场”，使用与其他导航一致的 Lucide 图标、尺寸、颜色与选中态。
+  - 列表页采用白色内容面板和双列大图卡片；提供全部、基金研究、组合诊断、市场内容、财富规划筛选，以及搜索和用户发布入口。
+  - 详情页采用左侧信息/工具、右侧模板预览的分栏；支持介绍展开收起、关注、收藏、分享、MCP/Skills/Agent/组件切换和“使用此模板”。
+  - 盈米官方与社区作者通过作者名称和官方认证图标区分；用户发布的模板会即时加入广场列表。
+- fonts and typography: 沿用项目现有字体栈与 `bolt-light` 文本层级；列表标题 30 px、卡片标题 16 px、详情标题 28 px，长标题启用截断。
+- spacing and layout rhythm: 列表采用最大 1320 px 的白色内容面板和两列卡片；详情页采用 360–400 px 左栏与弹性右栏，保留截图中的明确分区和橙色边界强调。
+- colors and visual tokens: 沿用现有白/浅灰背景和 `bolt-light` 中性色；关注、发布、使用模板以及详情分隔强调统一使用品牌橙 `bolt-orange`。
+- image quality and asset fidelity: 使用 ImageGen 生成四张 16:10 金融应用真实缩略图并保存在 `public/plaza`，没有使用占位框、CSS 绘图或拉伸参考图。
+- copy and content: 使用“应用广场”作为统一名称；介绍明确包含盈米官方与社区用户均可发布模板；金融内容均标注为模板演示语境。
+- interactions implemented: 分类、搜索、空状态清除筛选、打开详情、返回广场、介绍展开/收起、关注、收藏、复制分享链接、工具分类、发布表单、使用模板进入创建流程。
+- build validation: `npm run build` passed on 2026-08-10；Vite 仅报告现有大 chunk 警告，无 TypeScript 或构建错误。
+- full-view/focused comparison evidence, primary interactions, console errors: blocked；当前会话只能把页面打开到 Codex 浏览器面板，没有可调用的浏览器截图/点击控制能力，因此无法捕获实现截图并与两张源图放入同一比较输入。
+- comparison history: 没有可用的浏览器渲染截图，无法执行有效的第一次视觉比较；未声称视觉 QA 通过。
+- remaining verification: 在左侧进入“应用广场”，依次检查双列卡片、筛选、搜索、发布弹窗；打开任一模板检查左右分栏、工具标签和“使用此模板”。
+
 final result: blocked

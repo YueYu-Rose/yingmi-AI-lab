@@ -2371,7 +2371,14 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               代码
             </button>
             <button onClick={() => setViewMode('capabilities')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium ${viewMode === 'capabilities' ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
-              <Sparkles className="w-4 h-4" />
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 bg-current transition-colors duration-150"
+                style={{
+                  WebkitMask: 'url(/project-capabilities-icon.png) center / contain no-repeat',
+                  mask: 'url(/project-capabilities-icon.png) center / contain no-repeat',
+                }}
+              />
               能力
             </button>
           </div>

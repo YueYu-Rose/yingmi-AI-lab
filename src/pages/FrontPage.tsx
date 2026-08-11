@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FolderKanban, MessageCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import PromptBox from '@/components/PromptBox';
 import ProjectGrid from '@/components/ProjectGrid';
 import ToolsPage from '@/pages/ToolsPage';
+import PlazaPage from '@/pages/PlazaPage';
 import type { SidebarView, Project } from '@/types';
 
 interface FrontPageProps {
@@ -20,6 +21,7 @@ interface FrontPageProps {
 const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
   home: () => true,
   tools: () => false,
+  plaza: () => false,
   workspace: () => true,
   starred: (p) => p.starred,
   recent: (p) => p.lastViewed !== undefined,
@@ -30,10 +32,16 @@ const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
 
 export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [plazaDetailOpen, setPlazaDetailOpen] = useState(false);
 
   const isHome = activeView === 'home';
   const isTools = activeView === 'tools';
+  const isPlaza = activeView === 'plaza';
   const isWorkspace = activeView === 'workspace' || activeView === 'starred' || activeView === 'recent' || activeView === 'shared';
+
+  useEffect(() => {
+    if (!isPlaza) setPlazaDetailOpen(false);
+  }, [isPlaza]);
 
   const filteredProjects = projects
     .filter(viewFilters[activeView] || (() => true))
@@ -50,6 +58,7 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
         onViewChange={onViewChange}
         onOpenProject={onOpenProject}
         projects={projects}
+        compact={isTools || (isPlaza && plazaDetailOpen)}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -144,7 +153,9 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
               </div>
             </div>
           ) : isTools ? (
-            <ToolsPage onStartCreating={() => onViewChange('home')} />
+            <ToolsPage />
+          ) : isPlaza ? (
+            <PlazaPage onUseTemplate={onNewProject} onDetailChange={setPlazaDetailOpen} />
           ) : (
             <ProjectGrid
               view={activeView}
