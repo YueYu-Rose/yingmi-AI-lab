@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
+  BarChart3,
   Blocks,
   Bot,
   Check,
@@ -11,13 +12,16 @@ import {
   Eye,
   ExternalLink,
   Heart,
+  Monitor,
   Search,
   Share2,
+  Smartphone,
   Sparkles,
 } from 'lucide-react';
 
 type Category = '基金研究' | '组合诊断' | '市场内容' | '财富规划';
 type ToolKind = 'MCP' | 'Skills' | 'Agent' | '组件';
+type PreviewMode = 'desktop' | 'mobile';
 
 interface PlazaTemplate {
   id: string;
@@ -28,10 +32,11 @@ interface PlazaTemplate {
   description: string;
   cover: string;
   likes: number;
-  views: string;
+  views: number;
   tools: Record<ToolKind, string[]>;
   sourceUrl?: string;
   accent?: 'orange' | 'blue';
+  supportedDevices: PreviewMode[];
 }
 
 const toolTabs: { id: ToolKind; icon: typeof Database }[] = [
@@ -40,6 +45,21 @@ const toolTabs: { id: ToolKind; icon: typeof Database }[] = [
   { id: 'Agent', icon: Bot },
   { id: '组件', icon: Blocks },
 ];
+
+const mcpCatalog: Record<string, { category: string; description: string }> = {
+  搜索基金: { category: '基金数据', description: '按多维条件搜索筛选目标基金产品清单' },
+  基金净值历史: { category: '基金数据', description: '批量获取基金历史净值走势及区间表现数据' },
+  批量获取基金详情: { category: '基金数据', description: '批量获取基金基础详情及产品属性信息' },
+  基金风险分析: { category: '基金数据', description: '评估单只或多只基金的风险收益特征与暴露' },
+  基金交易限制信息: { category: '基金数据', description: '批量查询基金交易状态限额及申赎限制信息' },
+  基金代码模糊匹配: { category: '金融工具', description: '将模糊基金名称智能匹配为准确基金代码' },
+  基金诊断: { category: '投前分析', description: '对单只基金进行多维度的全景量化诊断分析' },
+  基金相关性分析: { category: '投后诊断', description: '计算多只基金之间的收益相关性与联动关系' },
+  市场温度计: { category: '投前分析', description: '输出市场温度指标及核心宽基指数行情快照' },
+  财经资讯: { category: '公开内容', description: '检索财经资讯内容并提取核心事件摘要信息' },
+  行业收益: { category: '基金数据', description: '拆解基金收益在不同行业层面的具体贡献来源' },
+  获取基金投资方案: { category: '投资顾问', description: '按配置目标生成对应的底层基金组合方案' },
+};
 
 const initialTemplates: PlazaTemplate[] = [
   {
@@ -50,11 +70,12 @@ const initialTemplates: PlazaTemplate[] = [
     description: '对比 25 只以上纳斯达克 100 基金的费率、实测跟踪误差、限额、规模与赎回速度，并按综合最优、大额定投、跟踪精度等场景辅助选择；还可自定义基金比例，实时计算组合费率、跟踪误差和每日可投额度。',
     cover: '/plaza/nasdaq-butler.svg',
     likes: 0,
-    views: '新上线',
+    views: 0,
     sourceUrl: 'https://qieman.com/mix-pay/nasdaq-butler',
     accent: 'blue',
+    supportedDevices: ['desktop'],
     tools: {
-      MCP: ['基金搜索', '批量获取基金详情', '基金交易限制信息', '基金风险分析'],
+      MCP: ['搜索基金', '批量获取基金详情', '基金交易限制信息', '基金风险分析'],
       Skills: ['fund-analyst'],
       Agent: ['纳指基金研究 Agent'],
       组件: ['基金对比表', '场景推荐', '组合计算器'],
@@ -69,7 +90,8 @@ const initialTemplates: PlazaTemplate[] = [
     description: '输入基金名称即可完成业绩、回撤、风险收益和持仓结构的多维比较，快速生成适合汇报与研究的可视化页面。',
     cover: '/plaza/fund-comparison.png',
     likes: 420,
-    views: '3.4K',
+    views: 3400,
+    supportedDevices: ['desktop', 'mobile'],
     tools: {
       MCP: ['基金代码模糊匹配', '批量获取基金详情', '基金净值历史'],
       Skills: ['fund-analyst', 'design-data-visualization'],
@@ -85,9 +107,10 @@ const initialTemplates: PlazaTemplate[] = [
     description: '从资产配置、相关性和集中度出发，识别组合中的主要风险，并给出易于理解的诊断摘要。',
     cover: '/plaza/portfolio-health.png',
     likes: 286,
-    views: '2.1K',
+    views: 2100,
+    supportedDevices: ['desktop', 'mobile'],
     tools: {
-      MCP: ['基金持仓查询', '基金业绩表现'],
+      MCP: ['基金诊断', '基金相关性分析'],
       Skills: ['portfolio-doctor', 'risk-insight'],
       Agent: ['组合诊断 Agent'],
       组件: ['健康评分', '相关性热力图', '风险预警'],
@@ -102,9 +125,10 @@ const initialTemplates: PlazaTemplate[] = [
     description: '聚合指数表现、市场事件和板块涨跌，用结构化页面生成每天可快速阅读的市场早报。',
     cover: '/plaza/market-brief.png',
     likes: 358,
-    views: '2.8K',
+    views: 2800,
+    supportedDevices: ['desktop', 'mobile'],
     tools: {
-      MCP: ['指数行情', '财经新闻', '行业指标'],
+      MCP: ['市场温度计', '财经资讯', '行业收益'],
       Skills: ['market-brief-writer'],
       Agent: ['市场解读 Agent'],
       组件: ['行情卡片', '事件时间轴', '板块柱状图'],
@@ -118,9 +142,10 @@ const initialTemplates: PlazaTemplate[] = [
     description: '整理家庭资产、现金流和长期目标，形成清晰的财富健康度、目标进度与配置建议页面。',
     cover: '/plaza/family-wealth.png',
     likes: 198,
-    views: '1.6K',
+    views: 1600,
+    supportedDevices: ['desktop', 'mobile'],
     tools: {
-      MCP: ['基金筛选', '基金详情'],
+      MCP: ['搜索基金', '获取基金投资方案'],
       Skills: ['wealth-planner', 'report-designer'],
       Agent: ['家庭财富 Agent'],
       组件: ['现金流图', '目标进度', '配置建议'],
@@ -128,52 +153,123 @@ const initialTemplates: PlazaTemplate[] = [
   },
 ];
 
+const PLAZA_METRICS_KEY = 'yingmi-plaza-metrics-v1';
+const PLAZA_LIKES_KEY = 'yingmi-plaza-liked-v1';
+
+function formatCount(value: number) {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1).replace('.0', '')}K`;
+  return String(value);
+}
+
+function getToolCategory(kind: ToolKind, tool: string) {
+  if (kind === 'Skills') return 'Skill';
+  if (kind === 'Agent') return 'Agent';
+  if (kind === '组件') return '组件';
+  return mcpCatalog[tool]?.category ?? '待核对';
+}
+
+function getToolDescription(kind: ToolKind, tool: string) {
+  if (kind === 'Skills') return `使用 ${tool} 完成项目所需的分析、内容组织或可视化。`;
+  if (kind === 'Agent') return `由 ${tool} 规划任务，并按需调用相关能力。`;
+  if (kind === '组件') return `使用 ${tool} 呈现应用中的数据与分析结果。`;
+  return mcpCatalog[tool]?.description ?? '暂无官方介绍';
+}
+
+function loadTemplates(): PlazaTemplate[] {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PLAZA_METRICS_KEY) ?? '{}') as Record<string, { likes?: number; views?: number }>;
+    return initialTemplates.map((template) => ({
+      ...template,
+      likes: saved[template.id]?.likes ?? template.likes,
+      views: saved[template.id]?.views ?? template.views,
+    }));
+  } catch {
+    return initialTemplates;
+  }
+}
+
 interface PlazaPageProps {
   onUseTemplate: (prompt: string) => void;
   onDetailChange?: (open: boolean) => void;
 }
 
 export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPageProps) {
-  const [selected, setSelected] = useState<PlazaTemplate | null>(null);
+  const [templates, setTemplates] = useState<PlazaTemplate[]>(loadTemplates);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [likedIds, setLikedIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(PLAZA_LIKES_KEY) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
   const [query, setQuery] = useState('');
+
+  const selected = templates.find((template) => template.id === selectedId) ?? null;
+
+  useEffect(() => {
+    const metrics = Object.fromEntries(templates.map(({ id, likes, views }) => [id, { likes, views }]));
+    window.localStorage.setItem(PLAZA_METRICS_KEY, JSON.stringify(metrics));
+  }, [templates]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PLAZA_LIKES_KEY, JSON.stringify(likedIds));
+  }, [likedIds]);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return initialTemplates.filter((item) =>
+    return templates.filter((item) =>
       !keyword || `${item.title}${item.author}${item.description}`.toLowerCase().includes(keyword)
     );
-  }, [query]);
+  }, [query, templates]);
+
+  const openTemplate = (id: string) => {
+    setTemplates((items) => items.map((item) => item.id === id ? { ...item, views: item.views + 1 } : item));
+    setSelectedId(id);
+    onDetailChange?.(true);
+  };
+
+  const toggleLike = (id: string) => {
+    const alreadyLiked = likedIds.includes(id);
+    setLikedIds((ids) => alreadyLiked ? ids.filter((likedId) => likedId !== id) : [...ids, id]);
+    setTemplates((items) => items.map((item) => item.id === id
+      ? { ...item, likes: Math.max(0, item.likes + (alreadyLiked ? -1 : 1)) }
+      : item));
+  };
 
   if (selected) {
     return (
       <TemplateDetail
         template={selected}
+        liked={likedIds.includes(selected.id)}
         onBack={() => {
-          setSelected(null);
+          setSelectedId(null);
           onDetailChange?.(false);
         }}
+        onToggleLike={() => toggleLike(selected.id)}
         onUse={() => onUseTemplate(`请使用「${selected.title}」模板，基于我的需求创建一个金融应用。保留模板的信息架构与可视化方式，并先向我确认需要替换的数据和内容。`)}
       />
     );
   }
 
   return (
-    <main className="min-h-full px-8 py-10 animate-fade-in">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-bolt-light-12">应用广场</h1>
-            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-bolt-light-8">
-              发现盈米与社区用户发布的金融应用模板，找到灵感后即可继续创建。
-            </p>
-          </div>
+    <main className="min-h-full px-8 py-8 animate-fade-in">
+      <div className="mx-auto max-w-[1180px]">
+        <header>
+          <h1 className="text-[30px] font-bold tracking-tight text-bolt-light-12">应用广场</h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-bolt-light-8">
+            发现盈米与社区用户发布的金融应用模板，找到灵感后即可继续创建。
+          </p>
+        </header>
+
+        <div className="mt-7 flex justify-end border-b border-bolt-light-5 pb-4">
           <label className="relative block w-full shrink-0 md:w-[280px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bolt-light-7" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索模板或作者"
-              className="h-10 w-full rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-12 outline-none transition placeholder:text-bolt-light-7 focus:border-bolt-orange"
+              className="h-10 w-full rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-12 outline-none transition placeholder:text-bolt-light-7 focus:border-bolt-blue"
             />
           </label>
         </div>
@@ -185,29 +281,33 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
                 <button
                   type="button"
                   onClick={() => {
-                    setSelected(item);
-                    onDetailChange?.(true);
+                    openTemplate(item.id);
                   }}
                   className="block w-full overflow-hidden rounded-2xl border border-bolt-light-5 bg-bolt-light-2 text-left shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:border-bolt-light-6 group-hover:shadow-md"
                 >
-                  <div className="aspect-[16/9] overflow-hidden bg-bolt-light-3">
-                    <img src={item.cover} alt={`${item.title}模板预览`} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.015]" />
+                  <div className="aspect-[16/9] overflow-hidden bg-white p-2 sm:p-3">
+                    <img src={item.cover} alt={`${item.title}应用首页缩略图`} className="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.01]" />
                   </div>
                 </button>
                 <div className="mt-3 flex items-start justify-between gap-3 px-1">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="truncate text-[16px] font-semibold text-bolt-light-12">{item.title}</h2>
-                      <span className="shrink-0 rounded-md bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-bolt-orange">{item.category}</span>
+                      <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-bolt-blue">{item.category}</span>
                     </div>
                     <p className="mt-1 flex items-center gap-1 text-[12.5px] text-bolt-light-8">
                       by {item.author}
-                      {item.official && <BadgeCheck className="h-3.5 w-3.5 text-bolt-orange" aria-label="盈米官方" />}
+                      {item.official && <BadgeCheck className="h-3.5 w-3.5 text-bolt-blue" aria-label="盈米官方" />}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] text-bolt-light-7">
-                    <Heart className="h-3.5 w-3.5" /> {item.likes}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(item.id)}
+                    aria-pressed={likedIds.includes(item.id)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] transition hover:bg-red-50 hover:text-bolt-red ${likedIds.includes(item.id) ? 'text-bolt-red' : 'text-bolt-light-7'}`}
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${likedIds.includes(item.id) ? 'fill-current text-bolt-red' : ''}`} /> {formatCount(item.likes)}
+                  </button>
                 </div>
               </article>
             ))}
@@ -224,15 +324,26 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
   );
 }
 
-function TemplateDetail({ template, onBack, onUse }: { template: PlazaTemplate; onBack: () => void; onUse: () => void }) {
+function TemplateDetail({
+  template,
+  liked,
+  onBack,
+  onUse,
+  onToggleLike,
+}: {
+  template: PlazaTemplate;
+  liked: boolean;
+  onBack: () => void;
+  onUse: () => void;
+  onToggleLike: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [descriptionOverflow, setDescriptionOverflow] = useState(false);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const [activeTool, setActiveTool] = useState<ToolKind>('MCP');
   const [followed, setFollowed] = useState(false);
-  const [liked, setLiked] = useState(false);
   const [shared, setShared] = useState(false);
-  const useBlueAccent = template.accent === 'blue';
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
 
   useLayoutEffect(() => {
     const description = descriptionRef.current;
@@ -272,9 +383,9 @@ function TemplateDetail({ template, onBack, onUse }: { template: PlazaTemplate; 
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-bolt-light-8">
                 <span className="inline-flex items-center gap-1.5">
                   by {template.author}
-                  {template.official && <BadgeCheck className="h-4 w-4 text-bolt-orange" />}
+                  {template.official && <BadgeCheck className="h-4 w-4 text-bolt-blue" />}
                 </span>
-                <button type="button" onClick={() => setFollowed((value) => !value)} className={`shrink-0 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold transition ${useBlueAccent ? (followed ? 'bg-blue-50 text-bolt-blue' : 'bg-bolt-blue text-white') : (followed ? 'bg-orange-50 text-bolt-orange' : 'bg-bolt-orange text-white')}`}>
+                <button type="button" onClick={() => setFollowed((value) => !value)} className={`shrink-0 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold transition ${followed ? 'bg-blue-50 text-bolt-blue' : 'bg-bolt-blue text-white'}`}>
                   {followed ? '已关注' : '+ 关注'}
                 </button>
               </div>
@@ -283,50 +394,101 @@ function TemplateDetail({ template, onBack, onUse }: { template: PlazaTemplate; 
             <div className="mt-6">
               <p ref={descriptionRef} className={`text-[14px] leading-7 text-bolt-light-10 ${expanded ? '' : 'line-clamp-2'}`}>{template.description}</p>
               {descriptionOverflow && (
-                <button type="button" onClick={() => setExpanded((value) => !value)} className={`mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-bolt-light-8 ${useBlueAccent ? 'hover:text-bolt-blue' : 'hover:text-bolt-orange'}`}>
+                <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-bolt-light-8 hover:text-bolt-blue">
                   {expanded ? <>收起 <ChevronUp className="h-3.5 w-3.5" /></> : <>展开 <ChevronDown className="h-3.5 w-3.5" /></>}
                 </button>
               )}
             </div>
 
             <div className="mt-7 flex items-center gap-5 border-b border-bolt-light-4 pb-7 text-[12px] text-bolt-light-8">
-              <button type="button" onClick={() => setLiked((value) => !value)} className={`inline-flex items-center gap-1.5 transition ${useBlueAccent ? 'hover:text-bolt-blue' : 'hover:text-bolt-orange'} ${liked ? (useBlueAccent ? 'text-bolt-blue' : 'text-bolt-orange') : ''}`}>
-                <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} /> {template.likes + (liked ? 1 : 0)}
+              <button type="button" onClick={onToggleLike} aria-pressed={liked} className={`inline-flex items-center gap-1.5 transition hover:text-bolt-red ${liked ? 'text-bolt-red' : ''}`}>
+                <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} /> {formatCount(template.likes)}
               </button>
-              <button type="button" onClick={share} className={`inline-flex items-center gap-1.5 transition ${useBlueAccent ? 'hover:text-bolt-blue' : 'hover:text-bolt-orange'}`}>
+              <button type="button" onClick={share} className="inline-flex items-center gap-1.5 transition hover:text-bolt-blue">
                 {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />} {shared ? '已复制' : '分享'}
               </button>
-              <span className="inline-flex items-center gap-1.5"><Eye className="h-4 w-4" /> {template.views}</span>
+              <span className="inline-flex items-center gap-1.5"><Eye className="h-4 w-4" /> {formatCount(template.views)}</span>
             </div>
 
             <div className="mt-7">
               <h2 className="text-[16px] font-semibold text-bolt-light-12">使用的盈米工具</h2>
               <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl bg-bolt-light-2 p-1">
                 {toolTabs.map(({ id, icon: Icon }) => (
-                  <button key={id} type="button" onClick={() => setActiveTool(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-[11.5px] font-medium transition ${activeTool === id ? `bg-white shadow-sm ${useBlueAccent ? 'text-bolt-blue' : 'text-bolt-orange'}` : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
+                  <button key={id} type="button" onClick={() => setActiveTool(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-[11.5px] font-medium transition ${activeTool === id ? 'bg-white text-bolt-blue shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}>
                     <Icon className="h-3.5 w-3.5" /> {id}
                   </button>
                 ))}
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 divide-y divide-bolt-light-4 overflow-hidden rounded-xl border border-bolt-light-4 bg-white">
                 {template.tools[activeTool].map((tool) => (
-                  <span key={tool} className="rounded-lg border border-bolt-light-4 bg-bolt-light-2 px-2.5 py-1.5 text-[11.5px] text-bolt-light-9">{tool}</span>
+                  <div key={tool} className="px-4 py-3.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[12.5px] font-semibold text-bolt-light-11">{tool}</span>
+                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10.5px] font-medium text-bolt-blue">
+                        {getToolCategory(activeTool, tool)}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-[11.5px] leading-5 text-bolt-light-7">{getToolDescription(activeTool, tool)}</p>
+                  </div>
                 ))}
               </div>
             </div>
 
-            <button type="button" onClick={onUse} className={`mt-8 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white shadow-sm transition hover:brightness-95 lg:mt-auto ${useBlueAccent ? 'bg-bolt-blue' : 'bg-bolt-orange'}`}>
+            <button type="button" onClick={onUse} className="mt-8 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bolt-blue text-[14px] font-semibold text-white shadow-sm transition hover:brightness-95 lg:mt-auto">
               <Sparkles className="h-4 w-4" /> 使用此模板
             </button>
           </aside>
 
           <div className="min-w-0 bg-[#f6f7f9]">
             <div className="p-5 lg:p-8">
-              <div className="overflow-hidden rounded-2xl border border-bolt-light-5 bg-white shadow-sm">
-                <img src={template.cover} alt={`${template.title}完整页面预览`} className="h-auto w-full object-contain" />
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-bolt-light-12">应用预览</h2>
+                  <p className="mt-1 text-[11.5px] text-bolt-light-7">可以在预览中直接点击和体验应用</p>
+                </div>
+                <div className="inline-flex rounded-xl border border-bolt-light-5 bg-white p-1 shadow-sm" role="group" aria-label="预览设备">
+                  <button
+                    type="button"
+                    disabled={!template.supportedDevices.includes('desktop')}
+                    onClick={() => setPreviewMode('desktop')}
+                    title={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
+                    aria-label={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
+                    aria-pressed={previewMode === 'desktop'}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'desktop' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
+                  >
+                    <Monitor className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!template.supportedDevices.includes('mobile')}
+                    onClick={() => setPreviewMode('mobile')}
+                    title={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
+                    aria-label={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
+                    aria-pressed={previewMode === 'mobile'}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'mobile' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
+                  >
+                    <Smartphone className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex min-h-[620px] items-start justify-center overflow-auto rounded-2xl border border-bolt-light-5 bg-[#e9ebef] p-3 shadow-inner lg:p-5">
+                <div className={`overflow-hidden bg-white shadow-xl transition-[width,border-radius] duration-300 ${previewMode === 'mobile' ? 'w-[390px] max-w-full rounded-[28px] border-[8px] border-bolt-light-12' : 'w-full rounded-xl border border-bolt-light-5'}`}>
+                  {template.sourceUrl ? (
+                    <iframe
+                      key={`${template.id}-${previewMode}`}
+                      src={template.sourceUrl}
+                      title={`${template.title}${previewMode === 'mobile' ? '手机' : 'PC'}版应用预览`}
+                      className="h-[720px] w-full bg-white"
+                      sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+                    />
+                  ) : (
+                    <InteractiveTemplatePreview template={template} compact={previewMode === 'mobile'} />
+                  )}
+                </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-[11.5px] text-bolt-light-7">
-                <span>页面内容为模板演示，数据仅用于展示</span>
+                <span>预览数据仅用于演示；PC 与手机版共享相同功能</span>
                 <div className="flex items-center gap-4">
                   <span>{template.category}</span>
                   {template.sourceUrl && (
@@ -340,5 +502,123 @@ function TemplateDetail({ template, onBack, onUse }: { template: PlazaTemplate; 
           </div>
       </div>
     </main>
+  );
+}
+
+function InteractiveTemplatePreview({
+  template,
+  compact,
+}: {
+  template: PlazaTemplate;
+  compact: boolean;
+}) {
+  const [activePanel, setActivePanel] = useState<'overview' | 'analysis' | 'tools'>('overview');
+  const [analysisReady, setAnalysisReady] = useState(false);
+  const accentButton = 'bg-bolt-blue';
+  const accentText = 'text-bolt-blue';
+
+  return (
+    <div className="min-h-[720px] bg-white">
+      <header className={`flex items-center justify-between border-b border-bolt-light-4 ${compact ? 'px-4 py-3' : 'px-7 py-4'}`}>
+        <div className="min-w-0">
+          <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{template.title}</h3>
+          {!compact && <p className="mt-0.5 text-[11px] text-bolt-light-7">由 {template.author} 创建</p>}
+        </div>
+      </header>
+
+      <nav className={`flex gap-1 border-b border-bolt-light-4 ${compact ? 'overflow-x-auto px-3' : 'px-6'}`} aria-label="应用预览导航">
+        {([
+          ['overview', '应用首页'],
+          ['analysis', '分析结果'],
+          ['tools', '能力明细'],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActivePanel(id)}
+            className={`relative whitespace-nowrap px-3 py-3 text-[11.5px] font-medium ${activePanel === id ? accentText : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
+          >
+            {label}
+            {activePanel === id && <span className={`absolute inset-x-2 bottom-0 h-0.5 ${accentButton}`} />}
+          </button>
+        ))}
+      </nav>
+
+      <div className={compact ? 'p-4' : 'p-7'}>
+        {activePanel === 'overview' && (
+          <div>
+            <button type="button" onClick={() => setActivePanel('analysis')} className={`group block w-full overflow-hidden rounded-xl border border-bolt-light-5 bg-white p-2 text-left ${compact ? 'h-44' : 'aspect-[16/9]'}`}>
+              <img src={template.cover} alt={`${template.title}应用首页`} className="h-full w-full object-contain object-center transition group-hover:scale-[1.01]" />
+            </button>
+            <div className={`mt-5 grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-3'}`}>
+              {['连接数据', '生成分析', '查看结论'].map((step, index) => (
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => {
+                    if (index > 0) setAnalysisReady(true);
+                    setActivePanel(index === 0 ? 'tools' : 'analysis');
+                  }}
+                  className="rounded-xl border border-bolt-light-5 bg-bolt-light-2 p-4 text-left transition hover:border-bolt-light-7 hover:bg-white"
+                >
+                  <span className={`text-[11px] font-semibold ${accentText}`}>0{index + 1}</span>
+                  <span className="mt-2 block text-[13px] font-semibold text-bolt-light-11">{step}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activePanel === 'analysis' && (
+          <div>
+            {!analysisReady ? (
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-bolt-light-6 bg-bolt-light-2 px-6 text-center">
+                <BarChart3 className={`h-8 w-8 ${accentText}`} />
+                <h4 className="mt-4 text-[15px] font-semibold text-bolt-light-12">准备生成分析结果</h4>
+                <p className="mt-2 max-w-sm text-[12px] leading-6 text-bolt-light-7">点击后将使用模板中的 MCP、Skills 与 Agent 生成演示结果。</p>
+                <button type="button" onClick={() => setAnalysisReady(true)} className={`mt-5 rounded-lg px-4 py-2.5 text-[12px] font-semibold text-white ${accentButton}`}>
+                  开始分析
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
+                  {[
+                    ['综合评分', '82 / 100'],
+                    ['已识别项目', '4'],
+                    ['风险提示', '2'],
+                    ['数据完整度', '96%'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-bolt-light-5 bg-white p-4 shadow-sm">
+                      <p className="text-[10.5px] text-bolt-light-7">{label}</p>
+                      <p className="mt-2 text-[17px] font-semibold text-bolt-light-12">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-bolt-light-5 p-5">
+                  <h4 className="text-[14px] font-semibold text-bolt-light-12">分析摘要</h4>
+                  <p className="mt-3 text-[12px] leading-7 text-bolt-light-8">演示结果已根据模板的信息架构生成。你可以继续使用模板，并在创建过程中替换为自己的基金、组合或市场数据。</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activePanel === 'tools' && (
+          <div className="space-y-5">
+            {toolTabs.map(({ id, icon: Icon }) => (
+              <section key={id} className="rounded-xl border border-bolt-light-5 p-4">
+                <h4 className="flex items-center gap-2 text-[13px] font-semibold text-bolt-light-11"><Icon className={`h-4 w-4 ${accentText}`} /> {id}</h4>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {template.tools[id].map((tool) => (
+                    <button key={tool} type="button" className="rounded-lg bg-bolt-light-2 px-3 py-2 text-[11px] text-bolt-light-9 transition hover:bg-bolt-light-4">{tool}</button>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

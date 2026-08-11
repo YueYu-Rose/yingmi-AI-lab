@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FolderKanban, MessageCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import PromptBox from '@/components/PromptBox';
@@ -33,6 +33,8 @@ const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
 export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [plazaDetailOpen, setPlazaDetailOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarStateBeforeDetail = useRef(false);
 
   const isHome = activeView === 'home';
   const isTools = activeView === 'tools';
@@ -40,8 +42,21 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
   const isWorkspace = activeView === 'workspace' || activeView === 'starred' || activeView === 'recent' || activeView === 'shared';
 
   useEffect(() => {
-    if (!isPlaza) setPlazaDetailOpen(false);
-  }, [isPlaza]);
+    if (!isPlaza && plazaDetailOpen) {
+      setPlazaDetailOpen(false);
+      setSidebarCollapsed(sidebarStateBeforeDetail.current);
+    }
+  }, [isPlaza, plazaDetailOpen]);
+
+  const handlePlazaDetailChange = (open: boolean) => {
+    if (open) {
+      sidebarStateBeforeDetail.current = sidebarCollapsed;
+      setSidebarCollapsed(true);
+    } else {
+      setSidebarCollapsed(sidebarStateBeforeDetail.current);
+    }
+    setPlazaDetailOpen(open);
+  };
 
   const filteredProjects = projects
     .filter(viewFilters[activeView] || (() => true))
@@ -59,53 +74,22 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
           onViewChange={onViewChange}
           onOpenProject={onOpenProject}
           projects={projects}
-          compact={isPlaza && plazaDetailOpen}
+          compact={sidebarCollapsed}
+          onCompactChange={setSidebarCollapsed}
           showLogo
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        {isWorkspace && (
-          <div className="min-h-14 border-b border-bolt-light-5 bg-white flex items-center px-6 gap-4">
-            <div className="relative flex-1 max-w-md">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索项目..."
-                className="w-full pl-3 pr-3 py-1.5 rounded-lg border border-bolt-light-5 bg-bolt-light-2 text-[13px] text-bolt-light-12 placeholder:text-bolt-light-7 outline-none focus:border-bolt-blue focus:bg-white transition-colors duration-150"
-              />
-            </div>
-            <div className="ml-auto flex items-center rounded-lg bg-bolt-light-3 p-1">
-              {([
-                ['workspace', '全部项目'],
-                ['starred', '已加星标'],
-                ['recent', '最近查看'],
-                ['shared', '共享给你'],
-              ] as [SidebarView, string][]).map(([view, label]) => (
-                <button
-                  key={view}
-                  type="button"
-                  onClick={() => onViewChange(view)}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${activeView === view ? 'bg-white text-bolt-light-12 shadow-sm' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Content */}
         <div className="flex-1 overflow-y-auto bolt-gradient-bg">
           {isHome ? (
-            <div className="min-h-full flex flex-col items-center justify-center px-6 py-10">
-              <div className="w-full">
+            <div className="flex min-h-full flex-col items-center justify-center px-8 py-10">
+              <div className="mx-auto w-full max-w-[1180px]">
                 <PromptBox onSubmit={onNewProject} />
 
                 {/* Recent chats and projects strip */}
                 {projects.length > 0 && (
-                  <div className="max-w-3xl mx-auto mt-12 space-y-8">
+                  <div className="mx-auto mt-12 space-y-8">
                     {(['chat', 'project'] as const).map((kind) => {
                       const items = projects.filter((item) => (item.kind ?? 'project') === kind).slice(0, 3);
                       if (items.length === 0) return null;
@@ -157,7 +141,7 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
           ) : isTools ? (
             <ToolsPage />
           ) : isPlaza ? (
-            <PlazaPage onUseTemplate={onNewProject} onDetailChange={setPlazaDetailOpen} />
+            <PlazaPage onUseTemplate={onNewProject} onDetailChange={handlePlazaDetailChange} />
           ) : (
             <ProjectGrid
               view={activeView}
@@ -166,6 +150,9 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
               onToggleStar={onToggleStar}
               onRenameProject={onRenameProject}
               onDeleteProject={onDeleteProject}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onViewChange={onViewChange}
             />
           )}
         </div>

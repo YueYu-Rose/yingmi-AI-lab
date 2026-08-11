@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Star, MoreHorizontal, FolderKanban, Clock, Users, CircleHelp, Sparkles, Pencil, Trash2, ExternalLink, MessageCircle } from 'lucide-react';
+import { Star, MoreHorizontal, FolderKanban, Clock, Users, CircleHelp, Sparkles, Pencil, Trash2, ExternalLink, MessageCircle, Search } from 'lucide-react';
 import type { SidebarView, Project } from '@/types';
 
 interface ProjectGridProps {
@@ -9,6 +9,9 @@ interface ProjectGridProps {
   onToggleStar: (id: string) => void;
   onRenameProject: (id: string, newName: string) => void;
   onDeleteProject: (id: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  onViewChange?: (view: SidebarView) => void;
 }
 
 function getViewConfig(view: SidebarView): { title: string; subtitle: string; icon: typeof FolderKanban } {
@@ -16,11 +19,11 @@ function getViewConfig(view: SidebarView): { title: string; subtitle: string; ic
     case 'workspace':
       return { title: '工作空间', subtitle: '集中管理你的聊天与项目', icon: FolderKanban };
     case 'starred':
-      return { title: '已加星标', subtitle: '你收藏的项目', icon: Star };
+      return { title: '工作空间', subtitle: '集中管理你的聊天与项目', icon: FolderKanban };
     case 'recent':
-      return { title: '最近查看', subtitle: '最近打开的项目', icon: Clock };
+      return { title: '工作空间', subtitle: '集中管理你的聊天与项目', icon: FolderKanban };
     case 'shared':
-      return { title: '共享给你的', subtitle: '他人共享给你的项目', icon: Users };
+      return { title: '工作空间', subtitle: '集中管理你的聊天与项目', icon: FolderKanban };
     case 'help':
       return { title: '帮助中心', subtitle: '查找指南、教程和答案', icon: CircleHelp };
     default:
@@ -39,7 +42,7 @@ function getRelativeTime(dateStr: string): string {
   return '刚刚';
 }
 
-export default function ProjectGrid({ view, projects, onOpenProject, onToggleStar, onRenameProject, onDeleteProject }: ProjectGridProps) {
+export default function ProjectGrid({ view, projects, onOpenProject, onToggleStar, onRenameProject, onDeleteProject, searchQuery = '', onSearchChange, onViewChange }: ProjectGridProps) {
   const config = getViewConfig(view);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -108,16 +111,12 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
 
   if (view === 'help') {
     return (
-      <div className="max-w-4xl mx-auto p-8 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-bolt-blue-light flex items-center justify-center">
-            <CircleHelp className="w-5 h-5 text-bolt-blue" strokeWidth={2} />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-bolt-light-12">帮助中心</h2>
-            <p className="text-bolt-light-8 text-sm">查找指南、教程和答案</p>
-          </div>
-        </div>
+      <div className="min-h-full px-8 py-8 animate-fade-in">
+        <div className="mx-auto max-w-[1180px]">
+        <header>
+          <h2 className="text-[30px] font-bold tracking-tight text-bolt-light-12">帮助中心</h2>
+          <p className="mt-2 text-[14px] text-bolt-light-8">查找指南、教程和答案</p>
+        </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
           {[
@@ -141,36 +140,67 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
             );
           })}
         </div>
-      </div>
-    );
-  }
-
-  if (projects.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 px-8 animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-bolt-light-3 flex items-center justify-center mb-4">
-          <config.icon className="w-8 h-8 text-bolt-light-7" />
         </div>
-        <h3 className="text-lg font-semibold text-bolt-light-12 mb-1">暂无项目</h3>
-        <p className="text-bolt-light-8 text-sm">开始构建，你的项目将显示在这里。</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-8 animate-fade-in">
-      <div className="flex items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-bolt-blue-light flex items-center justify-center">
-            <config.icon className="w-5 h-5 text-bolt-blue" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-bolt-light-12">{config.title}</h2>
-            <p className="text-bolt-light-8 text-sm">{config.subtitle}</p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-full px-8 py-8 animate-fade-in">
+      <div className="mx-auto max-w-[1180px]">
+      <header>
+        <h2 className="text-[30px] font-bold tracking-tight text-bolt-light-12">{config.title}</h2>
+        <p className="mt-2 text-[14px] text-bolt-light-8">{config.subtitle}</p>
+      </header>
 
+      {onSearchChange && onViewChange && (
+        <div className="mb-6 mt-7 flex flex-wrap items-end justify-between gap-5 border-b border-bolt-light-5">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto" role="tablist" aria-label="工作空间分类">
+            {([
+              ['workspace', '全部项目', FolderKanban],
+              ['starred', '已加星标', Star],
+              ['recent', '最近查看', Clock],
+              ['shared', '共享给你', Users],
+            ] as [SidebarView, string, typeof FolderKanban][]).map(([categoryView, label, Icon]) => {
+              const active = view === categoryView;
+              return (
+                <button
+                  key={categoryView}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => onViewChange(categoryView)}
+                  className={`relative inline-flex shrink-0 items-center gap-2 px-4 py-3 text-[14px] font-medium transition-colors ${active ? 'text-bolt-blue' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                  {active && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-bolt-blue" />}
+                </button>
+              );
+            })}
+          </div>
+          <label className="relative mb-2 block w-full shrink-0 md:w-[280px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bolt-light-7" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="搜索工作空间中的项目和聊天"
+              className="h-10 w-full rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-12 outline-none transition placeholder:text-bolt-light-7 focus:border-bolt-blue"
+            />
+          </label>
+        </div>
+      )}
+
+      {projects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 px-8">
+          <div className="w-16 h-16 rounded-2xl bg-bolt-light-3 flex items-center justify-center mb-4">
+            <config.icon className="w-8 h-8 text-bolt-light-7" />
+          </div>
+          <h3 className="text-lg font-semibold text-bolt-light-12 mb-1">暂无匹配内容</h3>
+          <p className="text-bolt-light-8 text-sm">尝试调整搜索词或切换分类。</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map((project) => (
           <div
@@ -304,6 +334,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
           </div>
         ))}
       </div>
+      )}
 
       {menuOpenId && menuPos && (() => {
         const project = projects.find((item) => item.id === menuOpenId);
@@ -351,6 +382,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
           </div>
         );
       })()}
+      </div>
     </div>
   );
 }

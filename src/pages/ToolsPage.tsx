@@ -158,7 +158,7 @@ export default function ToolsPage() {
   useEffect(() => setSearch(''), [activeTab]);
 
   return (
-    <main className="min-h-full bg-white px-8 py-8 animate-fade-in">
+    <main className="min-h-full px-8 py-8 animate-fade-in">
       <div className="mx-auto max-w-[1180px]">
         <header>
           <h1 className="text-[30px] font-bold tracking-tight text-bolt-light-12">能力中心</h1>
@@ -198,14 +198,14 @@ export default function ToolsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={activeTab === 'mcp' ? '搜索官方与自定义 MCP' : `搜索 ${TABS.find((tab) => tab.id === activeTab)?.label} 能力`}
-                className="h-10 w-56 rounded-lg border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-11 outline-none transition focus:border-bolt-blue"
+                className="h-10 w-[280px] rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-11 outline-none transition focus:border-bolt-blue"
               />
             </label>
             {activeTab === 'mcp' && (
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-bolt-blue px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-blue bg-white px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
               >
                 <Plus className="h-4 w-4" />
                 添加自定义 MCP

@@ -93,7 +93,7 @@ export default function PromptBox({ onSubmit, compact = false }: PromptBoxProps)
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto">
+    <div className="mx-auto w-full max-w-[1180px]">
       {!compact && (
         <h1 className={`text-center font-bold text-bolt-light-12 tracking-tight mb-3 animate-fade-in ${compact ? 'text-2xl' : 'text-[2.5rem]'}`}>
           用盈米能力，创建你的金融应用
