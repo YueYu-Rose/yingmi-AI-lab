@@ -5,6 +5,7 @@ import PromptBox from '@/components/PromptBox';
 import ProjectGrid from '@/components/ProjectGrid';
 import ToolsPage from '@/pages/ToolsPage';
 import PlazaPage from '@/pages/PlazaPage';
+import PlatformHeader from '@/components/PlatformHeader';
 import type { SidebarView, Project } from '@/types';
 
 interface FrontPageProps {
@@ -52,16 +53,20 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
     );
 
   return (
-    <div className="flex h-screen bg-bolt-light-2">
-      <Sidebar
-        activeView={activeView}
-        onViewChange={onViewChange}
-        onOpenProject={onOpenProject}
-        projects={projects}
-        compact={isTools || (isPlaza && plazaDetailOpen)}
-      />
+    <div className="flex h-screen flex-col bg-bolt-light-2">
+      {isTools && <PlatformHeader onViewChange={onViewChange} />}
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          activeView={activeView}
+          onViewChange={onViewChange}
+          onOpenProject={onOpenProject}
+          projects={projects}
+          compact={isPlaza && plazaDetailOpen}
+          showLogo={!isTools}
+        />
+
+        <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
         {isWorkspace && (
           <div className="min-h-14 border-b border-bolt-light-5 bg-white flex items-center px-6 gap-4">
@@ -166,6 +171,7 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
               onDeleteProject={onDeleteProject}
             />
           )}
+        </div>
         </div>
       </div>
     </div>

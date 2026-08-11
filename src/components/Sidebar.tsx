@@ -1,5 +1,6 @@
 import {
   Home,
+  Bell,
   CircleHelp,
   CirclePlus,
   FolderKanban,
@@ -22,16 +23,17 @@ interface SidebarProps {
   onOpenProject: (id: string) => void;
   projects: Project[];
   compact?: boolean;
+  showLogo?: boolean;
 }
 
 const navItems: { id: SidebarView; label: string; icon: typeof Home }[] = [
   { id: 'home', label: '开始创建', icon: CirclePlus },
-  { id: 'tools', label: '盈米工具', icon: Wrench },
   { id: 'plaza', label: '应用广场', icon: LayoutGrid },
   { id: 'workspace', label: '工作空间', icon: FolderKanban },
+  { id: 'tools', label: '能力中心', icon: Wrench },
 ];
 
-export default function Sidebar({ activeView, onViewChange, onOpenProject, projects, compact = false }: SidebarProps) {
+export default function Sidebar({ activeView, onViewChange, onOpenProject, projects, compact = false, showLogo = true }: SidebarProps) {
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -78,12 +80,14 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
   return (
     <aside className={`${compact ? 'w-16' : 'w-[260px]'} shrink-0 border-r border-bolt-light-5 bg-bolt-light flex flex-col h-full transition-[width] duration-200`}>
       {/* Logo */}
-      <div className={`h-14 flex items-center border-b border-bolt-light-5 ${compact ? 'justify-center px-2' : 'px-4'}`}>
-        <div className="flex items-center gap-2">
-          <img src="/yimi-logo.png" alt="盈米" className="w-9 h-9 object-contain shrink-0" />
-          {!compact && <span className="font-semibold text-bolt-light-12 text-[15px]">盈米实验室</span>}
+      {showLogo && (
+        <div className={`h-14 flex items-center border-b border-bolt-light-5 ${compact ? 'justify-center px-2' : 'px-4'}`}>
+          <div className="flex items-center gap-2">
+            <img src="/yimi-logo.png" alt="盈米" className="w-9 h-9 object-contain shrink-0" />
+            {!compact && <span className="font-semibold text-bolt-light-12 text-[15px]">盈米实验室</span>}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Navigation */}
       <nav className={`flex-1 ${compact ? 'overflow-visible px-2 py-3' : 'overflow-y-auto p-3'}`}>
@@ -217,6 +221,20 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
           {compact && (
             <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               帮助中心
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          title={compact ? '消息通知' : undefined}
+          aria-label="消息通知"
+          className={`group relative w-full flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-150 ${compact ? 'justify-center p-2.5' : 'gap-3 px-2.5 py-2'} text-bolt-light-9 hover:bg-bolt-light-3 hover:text-bolt-light-11`}
+        >
+          <Bell aria-hidden="true" strokeWidth={2} className="h-[18px] w-[18px] shrink-0" />
+          {!compact && '消息通知'}
+          {compact && (
+            <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              消息通知
             </span>
           )}
         </button>

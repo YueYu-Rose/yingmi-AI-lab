@@ -200,6 +200,29 @@
 
 final result: blocked
 
+## Capability Center And Custom MCP Manager
+
+- source visual truth path: `C:\Users\user1\.codex\generated_images\019fd5d7-66b4-7e31-83c2-67a2070e978a\exec-0269f51e-d300-468c-8247-5a54eba0368f.png`（1536 × 1024 px）
+- implementation screenshot path: unavailable in this Codex session.
+- intended viewport/state: 1440 × 1024 CSS px；`?view=tools`；MCP 分类默认状态及自定义 MCP 管理弹窗打开状态。
+- implementation evidence:
+  - 能力中心改为原生 React 页面，不再在首页嵌入完整 MCP HTML。
+  - 顶部恢复 AI 开放平台导航与客户案例入口；实验室侧栏保留最近内容和唯一账号入口。
+  - MCP、Skills、Agent、组件作为唯一一层能力大分类；当前分类提供产品介绍、接入/使用指南和常见问题轻量入口。
+  - 盈米 MCP 标记为平台内置与自动调用，只保留一个“查看工具目录（69）”入口。
+  - 自定义 MCP 管理弹窗实现搜索、展开工具、配置连接、绿色启用/灰色停用开关和文字状态；关闭开关不删除连接。
+- fonts and typography: 沿用项目现有 Inter / PingFang SC / Microsoft YaHei 字体栈以及 `bolt-light` 文本层级。
+- spacing and layout rhythm: 采用 1180 px 主内容宽度、64 px 平台导航、260 px 实验室侧栏及轻量行式能力列表；避免嵌套卡片。
+- colors and visual tokens: 导航和主操作沿用 `bolt-blue`；启用状态使用 emerald green；未启用状态使用中性灰，并同时提供文字状态。
+- image quality and asset fidelity: 复用现有盈米 logo 与 Lucide 图标库，没有新增占位图片、手绘 SVG 或 CSS 图形资产。
+- copy and content: 使用“能力中心 / 平台内置能力 / 我的扩展能力 / 自定义 MCP 管理”等确认文案；Skills、Agent 和组件使用金融场景示例内容。
+- build validation: `npm run build` passed on 2026-08-11；仅有现存的大 chunk 警告，无 TypeScript 或 Vite 构建错误。
+- full-view/focused comparison evidence, primary interactions, console errors: blocked；当前会话可将页面打开到 Codex 浏览器面板，但没有可调用的浏览器截图、点击和控制台读取工具，无法捕获实现状态并与源图放入同一比较输入。
+- remaining verification: 检查四类能力切换、搜索、自定义 MCP 弹窗开关、工具展开、配置 MCP 表单和工具目录外链。
+- comparison history: 浏览器渲染证据不可用，未执行有效视觉对比，也未声称视觉 QA 通过。
+
+final result: blocked
+
 ## Application Plaza Header Alignment Follow-up
 
 - source visual truth path: `C:\Users\user1\AppData\Local\Temp\codex-clipboard-ccd253f4-6efe-4a02-a0b1-cd4541a8ebe7.png`（1539 × 902 px）

@@ -122,7 +122,11 @@ const initialProjects: Project[] = [
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [frontView, setFrontView] = useState<SidebarView>('home');
+  const [frontView, setFrontView] = useState<SidebarView>(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    const supportedViews: SidebarView[] = ['home', 'tools', 'plaza', 'workspace', 'starred', 'recent', 'shared', 'help'];
+    return supportedViews.includes(requestedView as SidebarView) ? requestedView as SidebarView : 'home';
+  });
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -245,6 +249,17 @@ function App() {
     setInitialPrompt(null);
   };
 
+  const handleFrontViewChange = (view: SidebarView) => {
+    setFrontView(view);
+    const url = new URL(window.location.href);
+    if (view === 'home') {
+      url.searchParams.delete('view');
+    } else {
+      url.searchParams.set('view', view);
+    }
+    window.history.replaceState(null, '', url);
+  };
+
   if (currentPage === 'design') {
     return (
       <DesignPage
@@ -260,7 +275,7 @@ function App() {
   return (
     <FrontPage
       activeView={frontView}
-      onViewChange={setFrontView}
+      onViewChange={handleFrontViewChange}
       projects={projects}
       onToggleStar={handleToggleStar}
       onOpenProject={handleOpenProject}
