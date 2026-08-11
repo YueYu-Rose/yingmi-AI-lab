@@ -3,25 +3,30 @@ import {
   ArrowLeft,
   BadgeCheck,
   BarChart3,
-  Blocks,
   Bot,
   Check,
   ChevronDown,
   ChevronUp,
+  Compass,
   Database,
   Eye,
-  ExternalLink,
   Heart,
+  LayoutGrid,
   Monitor,
+  PanelsTopLeft,
+  PlugZap,
   Search,
   Share2,
   Smartphone,
   Sparkles,
+  Users,
+  Workflow,
 } from 'lucide-react';
 
 type Category = '基金研究' | '组合诊断' | '市场内容' | '财富规划';
 type ToolKind = 'MCP' | 'Skills' | 'Agent' | '组件';
 type PreviewMode = 'desktop' | 'mobile';
+type PublisherFilter = 'all' | 'official' | 'user';
 
 interface PlazaTemplate {
   id: string;
@@ -40,10 +45,16 @@ interface PlazaTemplate {
 }
 
 const toolTabs: { id: ToolKind; icon: typeof Database }[] = [
-  { id: 'MCP', icon: Database },
-  { id: 'Skills', icon: Sparkles },
+  { id: 'MCP', icon: PlugZap },
+  { id: 'Skills', icon: Workflow },
   { id: 'Agent', icon: Bot },
-  { id: '组件', icon: Blocks },
+  { id: '组件', icon: PanelsTopLeft },
+];
+
+const publisherTabs: { id: PublisherFilter; label: string; icon: typeof LayoutGrid }[] = [
+  { id: 'all', label: '全部', icon: LayoutGrid },
+  { id: 'official', label: '官方', icon: BadgeCheck },
+  { id: 'user', label: '用户', icon: Users },
 ];
 
 const mcpCatalog: Record<string, { category: string; description: string }> = {
@@ -204,6 +215,7 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
     }
   });
   const [query, setQuery] = useState('');
+  const [publisherFilter, setPublisherFilter] = useState<PublisherFilter>('all');
 
   const selected = templates.find((template) => template.id === selectedId) ?? null;
 
@@ -218,10 +230,13 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return templates.filter((item) =>
-      !keyword || `${item.title}${item.author}${item.description}`.toLowerCase().includes(keyword)
-    );
-  }, [query, templates]);
+    return templates.filter((item) => {
+      const matchesPublisher = publisherFilter === 'all'
+        || (publisherFilter === 'official' ? item.official : !item.official);
+      const matchesKeyword = !keyword || `${item.title}${item.author}${item.description}`.toLowerCase().includes(keyword);
+      return matchesPublisher && matchesKeyword;
+    });
+  }, [publisherFilter, query, templates]);
 
   const openTemplate = (id: string) => {
     setTemplates((items) => items.map((item) => item.id === id ? { ...item, views: item.views + 1 } : item));
@@ -262,8 +277,28 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
           </p>
         </header>
 
-        <div className="mt-7 flex justify-end border-b border-bolt-light-5 pb-4">
-          <label className="relative block w-full shrink-0 md:w-[280px]">
+        <div className="mt-7 flex flex-wrap items-end justify-between gap-5 border-b border-bolt-light-5">
+          <div className="flex items-center gap-1" role="tablist" aria-label="应用发布者分类">
+            {publisherTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = publisherFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPublisherFilter(tab.id)}
+                  className={`relative inline-flex items-center gap-2 px-4 py-3 text-[14px] font-medium transition-colors ${active ? 'text-bolt-blue' : 'text-bolt-light-8 hover:text-bolt-light-11'}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  {active && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-bolt-blue" />}
+                </button>
+              );
+            })}
+          </div>
+          <label className="relative mb-2 block w-full shrink-0 md:w-[280px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bolt-light-7" />
             <input
               value={query}
@@ -400,7 +435,7 @@ function TemplateDetail({
               )}
             </div>
 
-            <div className="mt-7 flex items-center gap-5 border-b border-bolt-light-4 pb-7 text-[12px] text-bolt-light-8">
+            <div className="mt-7 flex flex-wrap items-center gap-4 border-b border-bolt-light-4 pb-7 text-[12px] text-bolt-light-8">
               <button type="button" onClick={onToggleLike} aria-pressed={liked} className={`inline-flex items-center gap-1.5 transition hover:text-bolt-red ${liked ? 'text-bolt-red' : ''}`}>
                 <Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} /> {formatCount(template.likes)}
               </button>
@@ -408,6 +443,13 @@ function TemplateDetail({
                 {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />} {shared ? '已复制' : '分享'}
               </button>
               <span className="inline-flex items-center gap-1.5"><Eye className="h-4 w-4" /> {formatCount(template.views)}</span>
+              <button
+                type="button"
+                onClick={onUse}
+                className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-bolt-blue px-3 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> 使用模板
+              </button>
             </div>
 
             <div className="mt-7">
@@ -434,9 +476,6 @@ function TemplateDetail({
               </div>
             </div>
 
-            <button type="button" onClick={onUse} className="mt-8 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bolt-blue text-[14px] font-semibold text-white shadow-sm transition hover:brightness-95 lg:mt-auto">
-              <Sparkles className="h-4 w-4" /> 使用此模板
-            </button>
           </aside>
 
           <div className="min-w-0 bg-[#f6f7f9]">
@@ -446,29 +485,43 @@ function TemplateDetail({
                   <h2 className="text-[15px] font-semibold text-bolt-light-12">应用预览</h2>
                   <p className="mt-1 text-[11.5px] text-bolt-light-7">可以在预览中直接点击和体验应用</p>
                 </div>
-                <div className="inline-flex rounded-xl border border-bolt-light-5 bg-white p-1 shadow-sm" role="group" aria-label="预览设备">
-                  <button
-                    type="button"
-                    disabled={!template.supportedDevices.includes('desktop')}
-                    onClick={() => setPreviewMode('desktop')}
-                    title={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
-                    aria-label={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
-                    aria-pressed={previewMode === 'desktop'}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'desktop' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
-                  >
-                    <Monitor className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!template.supportedDevices.includes('mobile')}
-                    onClick={() => setPreviewMode('mobile')}
-                    title={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
-                    aria-label={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
-                    aria-pressed={previewMode === 'mobile'}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'mobile' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
-                  >
-                    <Smartphone className="h-4 w-4" />
-                  </button>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex rounded-xl border border-bolt-light-5 bg-white p-1 shadow-sm" role="group" aria-label="预览设备">
+                    <button
+                      type="button"
+                      disabled={!template.supportedDevices.includes('desktop')}
+                      onClick={() => setPreviewMode('desktop')}
+                      title={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
+                      aria-label={template.supportedDevices.includes('desktop') ? '查看 PC 版' : '该应用未提供 PC 版'}
+                      aria-pressed={previewMode === 'desktop'}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'desktop' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
+                    >
+                      <Monitor className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!template.supportedDevices.includes('mobile')}
+                      onClick={() => setPreviewMode('mobile')}
+                      title={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
+                      aria-label={template.supportedDevices.includes('mobile') ? '查看手机版' : '该应用未提供手机版'}
+                      aria-pressed={previewMode === 'mobile'}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-35 ${previewMode === 'mobile' ? 'bg-bolt-light-3 text-bolt-light-12' : 'text-bolt-light-7 hover:text-bolt-light-11'}`}
+                    >
+                      <Smartphone className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {template.sourceUrl && (
+                    <a
+                      href={template.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="在新标签页打开原应用"
+                      aria-label="在新标签页打开原应用"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-bolt-light-5 bg-white text-bolt-light-9 shadow-sm transition hover:border-bolt-blue hover:text-bolt-blue"
+                    >
+                      <Compass className="h-[18px] w-[18px]" />
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -489,14 +542,7 @@ function TemplateDetail({
               </div>
               <div className="mt-4 flex items-center justify-between text-[11.5px] text-bolt-light-7">
                 <span>预览数据仅用于演示；PC 与手机版共享相同功能</span>
-                <div className="flex items-center gap-4">
-                  <span>{template.category}</span>
-                  {template.sourceUrl && (
-                    <a href={template.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-bolt-blue hover:underline">
-                      查看原应用 <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  )}
-                </div>
+                <span>{template.category}</span>
               </div>
             </div>
           </div>

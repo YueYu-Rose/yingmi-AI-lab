@@ -5,27 +5,30 @@ import {
   BarChart3,
   BookOpen,
   Bot,
-  Boxes,
   ChevronDown,
   ChevronRight,
   CircleCheck,
   Database,
   ExternalLink,
   FileChartColumn,
+  PanelsTopLeft,
   Plus,
+  PlugZap,
+  RotateCw,
   Search,
-  Sparkles,
+  Trash2,
   TrendingUp,
+  Workflow,
   X,
 } from 'lucide-react';
 
 const MCP_LIST_URL = '/mcp/盈米MCP_统一可分享版.html#tools/all';
 
 const TABS = [
-  { id: 'mcp', label: 'MCP', icon: Database },
-  { id: 'skills', label: 'Skills', icon: Sparkles },
+  { id: 'mcp', label: 'MCP', icon: PlugZap },
+  { id: 'skills', label: 'Skills', icon: Workflow },
   { id: 'agent', label: 'Agent', icon: Bot },
-  { id: 'components', label: '组件', icon: Boxes },
+  { id: 'components', label: '组件', icon: PanelsTopLeft },
 ] as const;
 
 type CapabilityTab = (typeof TABS)[number]['id'];
@@ -191,7 +194,7 @@ export default function ToolsPage() {
             })}
           </div>
 
-          <div className="mb-2 flex items-center gap-3">
+          <div className="mb-2 flex items-center">
             <label className="relative block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bolt-light-7" />
               <input
@@ -201,16 +204,6 @@ export default function ToolsPage() {
                 className="h-10 w-[280px] rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-11 outline-none transition focus:border-bolt-blue"
               />
             </label>
-            {activeTab === 'mcp' && (
-              <button
-                type="button"
-                onClick={() => setAddModalOpen(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-blue bg-white px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
-              >
-                <Plus className="h-4 w-4" />
-                添加自定义 MCP
-              </button>
-            )}
           </div>
         </div>
 
@@ -219,6 +212,7 @@ export default function ToolsPage() {
             search={search}
             customMcps={customMcps}
             onChange={setCustomMcps}
+            onAddCustom={() => setAddModalOpen(true)}
           />
         ) : (
           <OfficialCapabilityList activeTab={activeTab} search={search} />
@@ -239,10 +233,12 @@ function McpCapabilityView({
   search,
   customMcps,
   onChange,
+  onAddCustom,
 }: {
   search: string;
   customMcps: CustomMcp[];
   onChange: Dispatch<SetStateAction<CustomMcp[]>>;
+  onAddCustom: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loadingIds, setLoadingIds] = useState<string[]>([]);
@@ -270,13 +266,28 @@ function McpCapabilityView({
     }, 900);
   };
 
+  const refreshMcp = (id: string) => {
+    if (loadingIds.includes(id)) return;
+    setLoadingIds((ids) => [...ids, id]);
+    window.setTimeout(() => {
+      setLoadingIds((ids) => ids.filter((loadingId) => loadingId !== id));
+    }, 900);
+  };
+
+  const deleteMcp = (id: string, name: string) => {
+    if (!window.confirm(`确定删除自定义 MCP「${name}」吗？删除后需要重新添加才能使用。`)) return;
+    if (expanded === id) setExpanded(null);
+    setLoadingIds((ids) => ids.filter((loadingId) => loadingId !== id));
+    onChange((items) => items.filter((item) => item.id !== id));
+  };
+
   return (
     <div className="mt-8 space-y-8">
       {officialMatches && <section>
         <h2 className="text-[16px] font-semibold text-bolt-light-11">平台内置能力</h2>
         <div className="mt-4 flex items-center gap-4 rounded-xl border border-bolt-light-5 bg-white px-5 py-5 transition hover:border-bolt-blue/40">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-bolt-blue text-white">
-            <Database className="h-6 w-6" />
+            <PlugZap className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -302,9 +313,19 @@ function McpCapabilityView({
       </section>}
 
       <section>
-        <div>
-          <h2 className="text-[16px] font-semibold text-bolt-light-11">我的扩展能力</h2>
-          <p className="mt-1 text-[12px] text-bolt-light-7">在这里直接开启或暂停智能体的调用权限；连接不会被删除。</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[16px] font-semibold text-bolt-light-11">我的扩展能力</h2>
+            <p className="mt-1 text-[12px] text-bolt-light-7">在这里直接开启或暂停智能体的调用权限；连接不会被删除。</p>
+          </div>
+          <button
+            type="button"
+            onClick={onAddCustom}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-blue bg-white px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
+          >
+            <Plus className="h-4 w-4" />
+            添加自定义 MCP
+          </button>
         </div>
 
         {filteredCustom.length > 0 ? (
@@ -341,6 +362,29 @@ function McpCapabilityView({
                     <span className={`w-12 text-right text-[12px] font-medium ${isLoading ? 'text-amber-500' : item.enabled ? 'text-emerald-600' : 'text-bolt-light-7'}`}>
                       {isLoading ? '加载中' : item.enabled ? '已启用' : '未启用'}
                     </span>
+                    {isExpanded && item.enabled && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => refreshMcp(item.id)}
+                          disabled={isLoading}
+                          title="重新同步工具"
+                          aria-label={`重新同步 ${item.name} 工具`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-bolt-light-7 transition hover:bg-bolt-light-4 hover:text-bolt-light-11 disabled:cursor-wait disabled:opacity-50"
+                        >
+                          <RotateCw className={`h-[18px] w-[18px] ${isLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteMcp(item.id, item.name)}
+                          title="删除自定义 MCP"
+                          aria-label={`删除自定义 MCP ${item.name}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-bolt-light-7 transition hover:bg-red-50 hover:text-bolt-red"
+                        >
+                          <Trash2 className="h-[18px] w-[18px]" />
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
                       role="switch"

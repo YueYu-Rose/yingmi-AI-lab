@@ -10,8 +10,6 @@ import {
   Wrench,
   LayoutGrid,
   MessageCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
   UserSquare2,
   LogOut,
 } from 'lucide-react';
@@ -35,6 +33,34 @@ const navItems: { id: SidebarView; label: string; icon: typeof Home }[] = [
   { id: 'workspace', label: '工作空间', icon: FolderKanban },
   { id: 'tools', label: '能力中心', icon: Wrench },
 ];
+
+function SidebarToggleIcon({ compact }: { compact: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 5h18M3 19h18" />
+      {compact ? (
+        <>
+          <path d="M3 12h11" />
+          <path d="m17 9 3 3-3 3" />
+        </>
+      ) : (
+        <>
+          <path d="M10 12h11" />
+          <path d="m7 9-3 3 3 3" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 export default function Sidebar({ activeView, onViewChange, onOpenProject, projects, compact = false, onCompactChange, showLogo = true }: SidebarProps) {
   const [search, setSearch] = useState('');
@@ -96,7 +122,7 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, proje
             aria-label={compact ? '展开左侧导航栏' : '收起左侧导航栏'}
             className="group relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-bolt-light-8 transition-colors hover:bg-bolt-light-3 hover:text-bolt-blue"
           >
-            {compact ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+            <SidebarToggleIcon compact={compact} />
             {compact && (
               <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-bolt-light-12 px-2.5 py-1.5 text-[12px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                 展开导航栏
