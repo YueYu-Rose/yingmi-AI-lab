@@ -284,21 +284,10 @@ function McpCapabilityView({
               <span className="rounded-md bg-bolt-blue-light px-2 py-1 text-[11px] font-semibold text-bolt-blue">自动调用</span>
             </div>
             <p className="mt-1.5 text-[13px] text-bolt-light-8">覆盖金融数据、基金研究、投顾服务等核心能力，助力金融场景智能化。</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
-              <span className="inline-flex items-center gap-1.5 text-bolt-light-8">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                可用
-              </span>
-              <span className="inline-flex flex-wrap items-center gap-1.5 text-bolt-light-8">
-                <span>了解盈米 MCP：</span>
-                {['产品介绍', '接入指南', '常见问题'].map((label, index) => (
-                  <span key={label} className="inline-flex items-center gap-1.5">
-                    {index > 0 && <span className="text-bolt-light-6">·</span>}
-                    <button type="button" className="font-medium text-bolt-blue hover:underline">{label}</button>
-                  </span>
-                ))}
-              </span>
-            </div>
+            <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-bolt-light-8">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              可用
+            </span>
           </div>
           <a
             href={MCP_LIST_URL}
