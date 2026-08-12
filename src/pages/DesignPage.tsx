@@ -315,14 +315,12 @@ function PlanCard({ phase, currentStep, steps, title, planDescription }: {
   }, [phase, title]);
 
   useEffect(() => {
-    if (currentStep < 0) {
-      setExpandedSteps(new Set());
-      return;
-    }
+    setExpandedSteps(new Set());
+  }, [title]);
 
-    const visibleStep = Math.min(currentStep, steps.length - 1);
-    setExpandedSteps(new Set([visibleStep]));
-  }, [currentStep, title, steps.length]);
+  useEffect(() => {
+    if (phase === 'planning') setExpandedSteps(new Set());
+  }, [phase]);
 
   const toggleStep = (index: number) => {
     setExpandedSteps((current) => {
@@ -440,6 +438,7 @@ function ExecutionChain({
   const visibleSteps = steps.slice(0, visibleCount);
   const mcpSteps = steps.filter((step) => step.type === 'MCP');
   const skillSteps = steps.filter((step) => step.type === 'Skill');
+  const stepSetKey = steps.map((step) => `${step.type}:${step.name}`).join('|');
 
   useEffect(() => {
     if (phase === 'building') setChainOpen(true);
@@ -447,9 +446,8 @@ function ExecutionChain({
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== 'building' || currentStep < 0) return;
-    setExpandedSteps(new Set([Math.min(currentStep, steps.length - 1)]));
-  }, [phase, currentStep, steps.length]);
+    setExpandedSteps(new Set());
+  }, [stepSetKey]);
 
   const toggleStep = (index: number) => {
     setExpandedSteps((current) => {
@@ -498,22 +496,21 @@ function ExecutionChain({
             return (
               <div key={`${step.name}-${index}`} className="px-1 animate-fade-in">
                 <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}</p>
-                <div className="rounded-xl border border-bolt-light-5 bg-white overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleStep(index)}
-                    aria-expanded={expanded}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-bolt-light-7 hover:text-bolt-light-9 transition-colors"
-                  >
-                    <span className="flex items-center gap-1.5 text-[12px] font-medium">
-                      {isActive && <Loader2 className="w-3.5 h-3.5 text-bolt-blue animate-spin shrink-0" />}
-                      {isActive ? '盈米正在执行（调用1个工具）' : '盈米计划生成（调用1个工具）'}
-                    </span>
-                    {expanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => toggleStep(index)}
+                  aria-expanded={expanded}
+                  className="w-full flex items-center justify-between gap-3 py-1 text-left text-bolt-light-7 hover:text-bolt-light-9 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5 text-[12px] font-medium">
+                    {isActive && <Loader2 className="w-3.5 h-3.5 text-bolt-blue animate-spin shrink-0" />}
+                    {isActive ? '盈米正在执行（调用1个工具）' : '盈米计划生成（调用1个工具）'}
+                  </span>
+                  {expanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+                </button>
 
-                  {expanded && (
-                    <div className="px-3 pb-3 animate-fade-in">
+                {expanded && (
+                  <div className="pt-2 pb-1 animate-fade-in">
                       <div data-testid="tool-call-pill" className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-bolt-light-3 px-3 py-1.5 text-[11.5px] text-bolt-light-8">
                         <img
                           data-testid="tool-call-icon"
@@ -532,9 +529,8 @@ function ExecutionChain({
                           ? '这一步会通过盈米 MCP 读取任务必需的金融数据，并在执行记录中保留数据来源。'
                           : '这一步会使用盈米 Skill 对已获取的数据进行分析或页面生成，产出可预览的结果。'}
                       </p>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
