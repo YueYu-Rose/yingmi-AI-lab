@@ -28,7 +28,6 @@ import {
   Paperclip,
   RefreshCw,
   Search,
-  Share2,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -60,6 +59,59 @@ interface DesignPageProps {
 type ViewMode = 'preview' | 'code' | 'capabilities';
 type DeviceMode = 'desktop' | 'mobile';
 type BuildPhase = 'waiting' | 'clarifying' | 'thinking' | 'planning' | 'building' | 'ready';
+const EXECUTION_DURATION_MS = 15_000;
+
+// 真实数据模式开关：URL 带 ?live=1 时开启（评审用），默认演示模式
+const LIVE = !new URLSearchParams(window.location.search).has('demo');
+console.log('[lab] LIVE模式:', LIVE, 'URL:', window.location.search);
+const SKILL_LABELS = ['fund-analyst', 'design-data-visualization', 'portfolio-doctor', 'market-morning-brief', 'wealth-report', 'wealth-family-advisor', 'wealth-goalcalc', 'wealth-goalmatch', 'fund-screener', 'advisor-content-studio', 'wealth-healthcheck'];
+
+// 调本地/部署后的真实 runtime（已接入盈米 MCP），把返回转成前端执行链步骤
+async function runLivePlan(query: string): Promise<ExecutionStep[]> {
+  const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
+  const resp = await fetch(`${base}/api/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!resp.ok) throw new Error(`runtime ${resp.status}`);
+  const data = await resp.json();
+  return (data.steps || []).map((s: any) => ({
+    name: s.name,
+    type: 'MCP' as const,
+    detail: s.purpose || s.name,
+    label: s.label || '',
+    ok: s.ok,
+    error: s.error || '',
+    toolResult: s.ok ? s.result : { error: s.error },
+    reasoning: s.reasoning || '',  // AI 思考文本（像小顾那样）
+    args: s.args || {},
+    purpose: s.purpose || '',
+  }));
+}
+
+// 真实模式：让后端 AI 针对用户需求实时生成"理解 + 方向选项"，替换写死的 INTENT_OPTIONS
+async function runClarify(query: string): Promise<{ understanding: string; options: IntentOption[] } | null> {
+  const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000';
+  const url = `${base}/api/clarify`;
+  console.log('[clarify] 正在请求:', url, { query });
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    console.log('[clarify] 响应状态:', resp.status);
+    if (!resp.ok) throw new Error(`clarify ${resp.status}`);
+    const data = await resp.json();
+    console.log('[clarify] 返回数据:', data);
+    if (!data || !Array.isArray(data.options)) throw new Error('clarify 返回格式异常');
+    return { understanding: data.understanding || '', options: data.options };
+  } catch (e) {
+    console.error('[clarify] 失败原因:', e);
+    return null;
+  }
+}
 
 const INTENT_OPTIONS: IntentOption[] = [
   {
@@ -87,6 +139,18 @@ const INTENT_OPTIONS: IntentOption[] = [
 interface ExecutionStep {
   name: string;
   type: 'MCP' | 'Skill';
+  detail: string;
+  label?: string; // 真实模式：场景语义标签（如 fund-analyst），仅展示用
+  ok?: boolean; // 真实模式：该步调盈米是否成功
+  error?: string; // 真实模式：失败原因
+  toolResult?: unknown; // 真实模式：该步调盈米返回的原始结果
+  reasoning?: string; // AI 思考推理文本（像小顾那样的思考过程）
+  args?: Record<string, unknown>; // 真实模式：调用参数
+  purpose?: string; // 真实模式：这步的目的
+}
+
+interface PlanStep {
+  title: string;
   detail: string;
 }
 
@@ -133,7 +197,10 @@ interface PreviewConfig {
 interface ScenarioConfig {
   key: 'comparison' | 'portfolio' | 'morning' | 'wealth' | 'screener' | 'allocation';
   title: string;
+  understanding: string;
+  reasoning: string;
   planDescription: string;
+  planSteps: PlanStep[];
   completion: string;
   steps: ExecutionStep[];
   preview?: PreviewConfig;
@@ -143,7 +210,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'comparison',
     title: '基金对比研究 Dashboard',
+    understanding: '你希望把多只基金放在同一套研究框架中比较，并直接获得一张能辅助阅读和汇报的可视化Dashboard。',
+    reasoning: '这个需求的关键不是简单罗列基金数据，而是先统一比较口径，再从收益、风险、持仓和基金经理等维度形成可解释的差异结论。',
     planDescription: '先校验基金、获取业绩与净值，再生成分析和可视化页面。',
+    planSteps: [
+      { title: '确认比较对象与研究口径', detail: '识别需要比较的基金，并统一时间区间、收益与风险指标口径。' },
+      { title: '建立多维比较框架', detail: '从业绩、回撤、波动、持仓和基金经理等维度组织对比。' },
+      { title: '提炼差异与风险结论', detail: '识别优势、短板和需要进一步核查的异常信号。' },
+      { title: '生成可预览Dashboard', detail: '将核心指标、趋势图、对比表和研究摘要组成可阅读页面。' },
+    ],
     completion: 'Dashboard 已生成。右侧预览展示了基金收益走势、风险指标和 fund-analyst 研究摘要。',
     steps: [
       { name: '基金代码模糊匹配', type: 'MCP', detail: '将基金名称匹配为准确代码' },
@@ -157,7 +232,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'portfolio',
     title: '基金组合健康诊断',
+    understanding: '你希望判断当前基金组合是否均衡、风险是否集中，并得到一份能够说明问题来源和改善方向的诊断页面。',
+    reasoning: '组合诊断不能只看单只基金表现，需要同时检查资产分布、风格暴露、持仓重叠、相关性和历史回撤，才能定位组合层面的风险。',
     planDescription: '识别持仓基金，评估资产配置、相关性与历史风险，生成组合诊断页面。',
+    planSteps: [
+      { title: '整理组合持仓', detail: '统一识别基金、持仓比例和产品属性，建立组合分析底表。' },
+      { title: '检查配置与集中度', detail: '分析资产类别、风格暴露、持仓重叠和集中风险。' },
+      { title: '评估历史风险表现', detail: '结合收益、回撤、波动和相关性判断组合健康度。' },
+      { title: '形成诊断与改善方向', detail: '输出问题来源、优先级和可供进一步讨论的调整方向。' },
+    ],
     completion: '组合诊断已完成。右侧展示健康度、资产分布、相关性风险和 portfolio-doctor 建议。',
     steps: [
       { name: '基金代码模糊匹配', type: 'MCP', detail: '识别持仓中的基金名称与代码' },
@@ -178,7 +261,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'morning',
     title: '市场早报网页',
+    understanding: '你希望把每天分散的市场信息整理成一份结构清晰、可以快速阅读和分享的早报网页。',
+    reasoning: '早报的价值不在信息数量，而在去重、排序和解释影响，因此需要先识别当天主线，再把事实、观点和风险提示分层呈现。',
     planDescription: '聚合财经资讯与基金经理观点，提取核心事件，生成结构化早报页面。',
+    planSteps: [
+      { title: '汇集当天市场信息', detail: '收集重要财经事件、市场动态和公开观点。' },
+      { title: '筛选并组织市场主线', detail: '对信息去重、归类，识别影响较大的主题与事件。' },
+      { title: '形成简明解读', detail: '说明事件影响、关注方向与需要提示的风险。' },
+      { title: '排版为早报网页', detail: '按照摘要、事件、观点和风险提示生成可分享长页。' },
+    ],
     completion: '市场早报已生成。右侧展示核心数据、重要事件与 market-morning-brief 解读。',
     steps: [
       { name: '财经资讯', type: 'MCP', detail: '检索财经内容并提取核心事件' },
@@ -197,7 +288,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'wealth',
     title: '家庭财富规划报告',
+    understanding: '你希望把家庭资产、负债、收支和未来目标整合起来，形成一份能看清财务现状与目标缺口的规划报告。',
+    reasoning: '财富规划需要先保证现金流和风险保障，再测算不同目标的金额与期限，最后才能讨论资产如何配置，不能直接从产品选择开始。',
     planDescription: '整理家庭资产负债与收支，测算财富目标，生成结构化财富规划报告。',
+    planSteps: [
+      { title: '建立家庭财务画像', detail: '整理资产负债、收入支出、保障和可投资资金。' },
+      { title: '梳理财富目标', detail: '明确教育、养老等目标的金额、期限与优先级。' },
+      { title: '测算目标缺口', detail: '评估当前积累、未来投入与目标达成可能性。' },
+      { title: '生成规划报告', detail: '汇总财务健康度、目标进度、配置方向和关键提醒。' },
+    ],
     completion: '家庭财富规划已生成。右侧展示财务健康度、目标达成情况和 wealth-report 摘要。',
     steps: [
       { name: '获取资产配置方案', type: 'MCP', detail: '获取与家庭目标匹配的配置规划方案' },
@@ -216,7 +315,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'screener',
     title: '基金筛选工具',
+    understanding: '你希望把选基条件做成一个可重复使用的筛选工具，快速缩小候选范围并看清每只基金被保留或排除的原因。',
+    reasoning: '基金筛选需要把硬性条件、绩效指标和风险排查分开处理，并保留筛选依据，避免只给出缺少解释的结果名单。',
     planDescription: '根据绩效、风险和产品属性筛选候选基金，通过诊断信号排除问题产品。',
+    planSteps: [
+      { title: '明确筛选条件', detail: '整理基金类型、期限、绩效、回撤和基金经理等约束。' },
+      { title: '形成初始候选池', detail: '按硬性条件筛出满足基本要求的基金范围。' },
+      { title: '执行风险排查', detail: '检查异常回撤、风格漂移和其他需要关注的信号。' },
+      { title: '生成可解释结果页', detail: '展示候选基金、关键指标以及保留或排除原因。' },
+    ],
     completion: '基金筛选已完成。右侧展示筛选条件、候选结果和 fund-screener 排除原因。',
     steps: [
       { name: '搜索基金', type: 'MCP', detail: '按多维条件搜索目标基金产品' },
@@ -236,7 +343,15 @@ const SCENARIOS: ScenarioConfig[] = [
   {
     key: 'allocation',
     title: '资产配置模拟器',
+    understanding: '你希望根据财富目标、投资期限和风险承受能力，得到一套可调整参数并观察结果变化的资产配置模拟方案。',
+    reasoning: '资产配置模拟必须先明确目标与约束，再比较不同情景下的收益、波动和回撤，最终展示的是方案权衡而不是确定性收益承诺。',
     planDescription: '明确财富目标与风险约束，测算目标缺口，生成资产配置模拟方案。',
+    planSteps: [
+      { title: '明确目标与约束', detail: '整理目标金额、投资期限、可投入资金和风险边界。' },
+      { title: '建立配置情景', detail: '形成不同资产比例的基准、乐观和压力情景。' },
+      { title: '评估目标匹配度', detail: '比较预期收益、波动、回撤和目标达成情况。' },
+      { title: '生成交互模拟页面', detail: '展示目标配置、调整方向和不同参数下的结果变化。' },
+    ],
     completion: '资产配置方案已生成。右侧展示目标配置、预期风险收益与 wealth-goalmatch 说明。',
     steps: [
       { name: '获取资产配置方案', type: 'MCP', detail: '基于目标需求生成匹配的资产配置规划' },
@@ -296,40 +411,96 @@ const fundRows = [
   { name: '红利低波A', code: '000003', return: '+7.6%', drawdown: '-3.9%', volatility: '8.6%', risk: '中低' },
 ];
 
-function PlanCard({ phase, currentStep, steps, title, planDescription }: {
-  phase: BuildPhase;
-  currentStep: number;
-  steps: ExecutionStep[];
-  title: string;
-  planDescription: string;
-}) {
-  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(() => new Set());
-  const [flowOpen, setFlowOpen] = useState(phase === 'planning');
+// 真实模式下，执行链每步展开显示盈米返回的真实数据；演示模式保持原说明文字
+function ToolResultBlock({ step }: { step: ExecutionStep }) {
+  if (!step.ok) {
+    return <p className="mt-3 text-[12.5px] leading-relaxed text-red-600">调用失败：{step.error}</p>;
+  }
+  let text = '';
+  try {
+    const r = step.toolResult as any;
+    if (Array.isArray(r?.content)) text = r.content.map((c: any) => c.text || '').join('');
+    else text = JSON.stringify(r);
+  } catch {
+    text = String(step.toolResult);
+  }
+  return (
+    <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-bolt-light-2 p-3 text-[11px] leading-relaxed text-bolt-light-10 whitespace-pre-wrap break-words">
+      {text.slice(0, 2000)}
+    </pre>
+  );
+}
 
-  const mcpSteps = steps.filter((step) => step.type === 'MCP');
-  const skillSteps = steps.filter((step) => step.type === 'Skill');
+function StepDetail({ step }: { step: ExecutionStep }) {
+  if (step.toolResult) return <ToolResultBlock step={step} />;
+  // 优先显示 AI 推理文本（像小顾那样的思考过程），没有才降级
+  if (step.reasoning) {
+    return (
+      <div className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8 whitespace-pre-wrap">
+        {step.reasoning}
+      </div>
+    );
+  }
+  return (
+    <p className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8">
+      {step.type === 'MCP'
+        ? '这一步会通过盈米 MCP 读取任务必需的金融数据，并在执行记录中保留数据来源。'
+        : '这一步会使用盈米 Skill 对已获取的数据进行分析或页面生成，产出可预览的结果。'}
+    </p>
+  );
+}
+
+function ClarificationThinking({ loading, prompt }: { loading: boolean; prompt: string }) {
+  const [open, setOpen] = useState(loading);
+
+  useEffect(() => {
+    setOpen(loading);
+  }, [loading, prompt]);
+
+  return (
+    <div data-testid="clarification-thinking" className="animate-slide-up">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 py-1.5 text-left text-bolt-light-7 transition-colors hover:text-bolt-light-10"
+      >
+        <span className="flex min-w-0 items-center gap-2 text-[12px] font-medium">
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-bolt-blue" />
+          ) : (
+            <Check className="h-3.5 w-3.5 shrink-0 text-bolt-green" />
+          )}
+          <span>{loading ? '正在分析你的需求' : '已完成需求分析 · 6 秒'}</span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="ml-[7px] space-y-3 border-l border-bolt-light-5 pb-1 pl-5 pt-3 text-[13px] leading-relaxed text-bolt-light-8 animate-fade-in">
+          <p>先识别用户希望解决的工作任务，并判断需要生成的应用类型。</p>
+          <p>梳理目标用户、核心数据和页面需要回答的关键问题。</p>
+          <p>{loading ? '正在结合现有信息，判断还需要向用户确认哪些内容。' : '分析完成：已有信息可以形成几个方向，先请用户确认最符合目标的一项。'}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanCard({ phase, title, understanding, reasoning, planDescription, planSteps }: {
+  phase: BuildPhase;
+  title: string;
+  understanding: string;
+  reasoning: string;
+  planDescription: string;
+  planSteps: PlanStep[];
+}) {
+  const [flowOpen, setFlowOpen] = useState(phase === 'planning');
 
   useEffect(() => {
     if (phase === 'planning') setFlowOpen(true);
     if (phase === 'building' || phase === 'ready') setFlowOpen(false);
   }, [phase, title]);
-
-  useEffect(() => {
-    setExpandedSteps(new Set());
-  }, [title]);
-
-  useEffect(() => {
-    if (phase === 'planning') setExpandedSteps(new Set());
-  }, [phase]);
-
-  const toggleStep = (index: number) => {
-    setExpandedSteps((current) => {
-      const next = new Set(current);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
 
   return (
     <div data-testid="thinking-flow" className="animate-slide-up">
@@ -345,62 +516,32 @@ function PlanCard({ phase, currentStep, steps, title, planDescription }: {
           ) : (
             <Check className="w-3.5 h-3.5 text-bolt-green" />
           )}
-          <span>{phase === 'planning' ? '正在生成思考与执行计划' : `已完成思考与执行计划 · ${steps.length} 步`}</span>
-          {phase !== 'planning' && (
-            <span className="basis-full pl-[22px] text-[11px] font-normal leading-relaxed text-bolt-light-7">
-              {mcpSteps.length} 个 MCP：{mcpSteps.map((step) => step.name).join('、')} · {skillSteps.length} 个 Skills：{skillSteps.map((step) => step.name).join('、')}
-            </span>
-          )}
+          <span>{phase === 'planning' ? '正在生成需求理解与计划' : `已完成需求理解与计划 · ${planSteps.length} 步`}</span>
         </span>
         {flowOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
       </button>
 
       {flowOpen && (
-        <div data-testid="thinking-flow-content" className="space-y-4 pt-3 animate-fade-in">
-          <p className="px-1 text-[13.5px] leading-relaxed text-bolt-light-11">
-            我来帮你完成「{title}」。我会先检查需要的数据和金融能力，再生成页面。
-          </p>
+        <div data-testid="thinking-flow-content" className="ml-[7px] space-y-4 border-l border-bolt-light-5 pb-1 pl-5 pt-3 animate-fade-in">
+          <div className="space-y-2 px-1">
+            <p className="text-[12px] font-semibold text-bolt-light-8">AI对需求的理解</p>
+            <p className="text-[13.5px] leading-relaxed text-bolt-light-11">{understanding}</p>
+            <p className="pt-1 text-[12px] font-semibold text-bolt-light-8">AI思考</p>
+            <p className="text-[13.5px] leading-relaxed text-bolt-light-11">{reasoning}</p>
+          </div>
 
-          {steps.map((step, index) => {
-            const expanded = expandedSteps.has(index);
-            return (
-              <div key={`${step.name}-${index}`} className="px-1">
-                <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}。</p>
-                <button
-                  type="button"
-                  onClick={() => toggleStep(index)}
-                  aria-expanded={expanded}
-                  className="w-full flex items-center justify-between gap-3 py-1 text-left text-bolt-light-7 hover:text-bolt-light-9 transition-colors"
-                >
-                  <span className="text-[12px] font-medium">盈米计划生成（调用1个工具）</span>
-                  {expanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
-                </button>
-
-                {expanded && (
-                  <div className="pt-2 pb-1 animate-fade-in">
-                    <div data-testid="tool-call-pill" className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-bolt-light-3 px-3 py-1.5 text-[11.5px] text-bolt-light-8">
-                      <img
-                        data-testid="tool-call-icon"
-                        src="/tool-call-link-icon.png"
-                        alt=""
-                        aria-hidden="true"
-                        className="w-4 h-4 shrink-0 object-contain mix-blend-multiply"
-                      />
-                      <span className="shrink-0">调用工具</span>
-                      <span className="text-bolt-light-6">|</span>
-                      <span className="truncate font-medium">{step.name}</span>
-                      <Check className="w-3.5 h-3.5 shrink-0" />
-                    </div>
-                    <p className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8">
-                      {step.type === 'MCP'
-                        ? '这一步会通过盈米 MCP 读取任务必需的金融数据，并在执行记录中保留数据来源。'
-                        : '这一步会使用盈米 Skill 对已获取的数据进行分析或页面生成，产出可预览的结果。'}
-                    </p>
-                  </div>
-                )}
+          <div className="space-y-2 px-1">
+            <p className="text-[12px] font-semibold text-bolt-light-8">任务计划</p>
+            {planSteps.map((step, index) => (
+              <div key={step.title} className="flex items-start gap-3 rounded-xl bg-bolt-light-2 px-3 py-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bolt-blue-light text-[10px] font-semibold text-bolt-blue">{index + 1}</span>
+                <div>
+                  <p className="text-[13px] font-medium text-bolt-light-11">{step.title}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-relaxed text-bolt-light-7">{step.detail}</p>
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
 
           <p className="px-1 pt-1 text-[13.5px] leading-relaxed text-bolt-light-11">执行计划已准备好。{planDescription}</p>
 
@@ -436,8 +577,6 @@ function ExecutionChain({
     ? steps.length
     : Math.min(Math.max(currentStep + 1, 0), steps.length);
   const visibleSteps = steps.slice(0, visibleCount);
-  const mcpSteps = steps.filter((step) => step.type === 'MCP');
-  const skillSteps = steps.filter((step) => step.type === 'Skill');
   const stepSetKey = steps.map((step) => `${step.type}:${step.name}`).join('|');
 
   useEffect(() => {
@@ -479,23 +618,18 @@ function ExecutionChain({
               ? `正在执行计划 · ${visibleCount}/${steps.length} 步`
               : `已完成思考与执行计划 · ${steps.length} 步`}
           </span>
-          {phase === 'ready' && (
-            <span className="basis-full pl-[22px] text-[11px] font-normal leading-relaxed text-bolt-light-7">
-              {mcpSteps.length} 个 MCP：{mcpSteps.map((step) => step.name).join('、')} · {skillSteps.length} 个 Skills：{skillSteps.map((step) => step.name).join('、')}
-            </span>
-          )}
         </span>
         {chainOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
       </button>
 
       {chainOpen && (
-        <div data-testid="execution-chain-content" className="space-y-4 pt-3 animate-fade-in">
+        <div data-testid="execution-chain-content" className="ml-[7px] space-y-5 border-l border-bolt-light-5 pb-1 pl-5 pt-3 animate-fade-in">
           {visibleSteps.map((step, index) => {
             const expanded = expandedSteps.has(index);
             const isActive = phase === 'building' && index === currentStep;
             return (
               <div key={`${step.name}-${index}`} className="px-1 animate-fade-in">
-                <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.detail}</p>
+                <p className="text-[13.5px] leading-relaxed text-bolt-light-11 mb-2">{step.reasoning || step.detail}</p>
                 <button
                   type="button"
                   onClick={() => toggleStep(index)}
@@ -524,11 +658,7 @@ function ExecutionChain({
                         <span className="truncate font-medium">{step.name}</span>
                         {!isActive && <Check className="w-3.5 h-3.5 shrink-0" />}
                       </div>
-                      <p className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8">
-                        {step.type === 'MCP'
-                          ? '这一步会通过盈米 MCP 读取任务必需的金融数据，并在执行记录中保留数据来源。'
-                          : '这一步会使用盈米 Skill 对已获取的数据进行分析或页面生成，产出可预览的结果。'}
-                      </p>
+                      <StepDetail step={step} />
                   </div>
                 )}
               </div>
@@ -1360,6 +1490,28 @@ function aggregateCapabilityUsage(steps: CapabilityRecord[]): {
   };
 }
 
+function mergeCapabilityRecords(current: CapabilityRecord[], incoming: CapabilityRecord[]): CapabilityRecord[] {
+  const seen = new Set(current.map((record) => `${record.type}:${record.name}:${record.detail}`));
+  const merged = [...current];
+
+  for (const record of incoming) {
+    const key = `${record.type}:${record.name}:${record.detail}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(record);
+  }
+
+  return merged;
+}
+
+function capabilityRecordsFromSteps(steps: ExecutionStep[]): CapabilityRecord[] {
+  return steps.map((step) => ({
+    name: step.label || step.name,
+    type: (step.label && SKILL_LABELS.includes(step.label) ? 'Skill' : step.type) as CapabilityKind,
+    detail: step.detail,
+  }));
+}
+
 function CapabilitiesWorkspace({
   usageSteps,
   ready,
@@ -1463,12 +1615,12 @@ function ExecutionPlanDock({
   phase,
   currentStep,
   title,
-  steps,
+  planSteps,
 }: {
   phase: BuildPhase;
   currentStep: number;
   title: string;
-  steps: ExecutionStep[];
+  planSteps: PlanStep[];
 }) {
   const [open, setOpen] = useState(phase === 'thinking' || phase === 'planning' || phase === 'building');
   const isRunning = phase === 'thinking' || phase === 'planning' || phase === 'building';
@@ -1480,9 +1632,9 @@ function ExecutionPlanDock({
   }, [isDone, isRunning]);
 
   const completedCount = isDone
-    ? steps.length
+    ? planSteps.length
     : phase === 'building'
-      ? Math.max(0, currentStep)
+      ? Math.min(Math.max(0, currentStep), planSteps.length)
       : 0;
   const currentLabel = phase === 'waiting'
     ? '等待生成执行计划'
@@ -1491,13 +1643,13 @@ function ExecutionPlanDock({
       : phase === 'planning'
         ? '正在生成执行计划'
         : phase === 'building'
-          ? steps[currentStep]?.name ?? '正在执行计划'
+          ? planSteps[Math.min(currentStep, Math.max(planSteps.length - 1, 0))]?.title ?? '正在执行计划'
           : `${title} 已完成`;
 
   const activeStepIndex = phase === 'building'
-    ? Math.min(Math.max(currentStep, 0), Math.max(steps.length - 1, 0))
+    ? Math.min(Math.max(currentStep, 0), Math.max(planSteps.length - 1, 0))
     : -1;
-  const activeStep = activeStepIndex >= 0 ? steps[activeStepIndex] : undefined;
+  const activeStep = activeStepIndex >= 0 ? planSteps[activeStepIndex] : undefined;
 
   return (
     <div data-testid="execution-plan-dock" className="mx-3 rounded-xl border border-bolt-light-5 bg-white shadow-sm overflow-hidden">
@@ -1515,7 +1667,7 @@ function ExecutionPlanDock({
           <ListChecks className="w-4 h-4 shrink-0 text-bolt-light-7" />
         )}
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-bolt-light-11">{currentLabel}</span>
-        <span className="text-[11.5px] tabular-nums text-bolt-light-7">{completedCount}/{steps.length || 0}</span>
+        <span className="text-[11.5px] tabular-nums text-bolt-light-7">{completedCount}/{planSteps.length || 0}</span>
         {open ? <ChevronUp className="w-4 h-4 shrink-0 text-bolt-light-7" /> : <ChevronDown className="w-4 h-4 shrink-0 text-bolt-light-7" />}
       </button>
 
@@ -1523,13 +1675,10 @@ function ExecutionPlanDock({
         <div data-testid="execution-plan-dock-content" className="border-t border-bolt-light-5 px-3 py-2 animate-fade-in">
           {isDone ? (
             <div data-testid="execution-plan-all-steps" className="space-y-0.5">
-              {steps.map((step) => (
-                <div key={step.name} className="flex items-center gap-2 rounded-lg px-2 py-2">
+              {planSteps.map((step) => (
+                <div key={step.title} className="flex items-center gap-2 rounded-lg px-2 py-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-bolt-green" />
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-bolt-light-9">{step.name}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded ${step.type === 'MCP' ? 'bg-bolt-blue-light text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
-                    {step.type}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-bolt-light-9">{step.title}</span>
                 </div>
               ))}
             </div>
@@ -1539,16 +1688,11 @@ function ExecutionPlanDock({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-bolt-blue">
-                    {activeStep?.name ?? currentLabel}
+                    {activeStep?.title ?? currentLabel}
                   </span>
-                  {activeStep && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${activeStep.type === 'MCP' ? 'bg-white/80 text-bolt-blue' : 'bg-violet-50 text-bolt-purple'}`}>
-                      {activeStep.type}
-                    </span>
-                  )}
                 </div>
                 <p className="mt-1 text-[10.5px] leading-relaxed text-bolt-light-7">
-                  {activeStep?.detail ?? (phase === 'thinking' ? '正在识别项目类型，并匹配所需的盈米 MCP 与 Skills。' : '正在整理执行步骤与能力调用顺序。')}
+                  {activeStep?.detail ?? (phase === 'thinking' ? '正在识别目标、交付物与关键约束。' : '正在整理完成目标所需的任务顺序。')}
                 </p>
               </div>
             </div>
@@ -1563,6 +1707,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [requestPrompt, setRequestPrompt] = useState(initialPrompt ?? project?.description ?? '');
   const [requestPromptAt] = useState(() => project?.createdAt ?? new Date().toISOString());
   const [clarifyingReplyKey, setClarifyingReplyKey] = useState(0);
+  // 真实模式下，AI 针对用户需求实时生成的理解文字与方向选项
+  const [clarify, setClarify] = useState<{ understanding: string; options: IntentOption[] } | null>(null);
+  const [clarifyLoading, setClarifyLoading] = useState(
+    () => Boolean(initialPrompt || project?.kind === 'chat')
+  );
   const scenario = getScenario(project ?? {
     id: 'draft',
     name: requestPrompt || '新建项目',
@@ -1590,6 +1739,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   );
   const [initialPlanSteps, setInitialPlanSteps] = useState<ExecutionStep[]>(() => [...scenario.steps]);
   const [activeSteps, setActiveSteps] = useState<ExecutionStep[]>(() => [...scenario.steps]);
+  const [isLive, setIsLive] = useState(false);
   const [capabilityLog, setCapabilityLog] = useState<CapabilityRecord[]>(() =>
     project && !initialPrompt && project.kind !== 'chat' ? defaultProjectCapabilities(scenario) : []
   );
@@ -1608,16 +1758,33 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [selectedPreviewBlock, setSelectedPreviewBlock] = useState<string | null>(null);
   const [previewComment, setPreviewComment] = useState('');
   const [publishOpen, setPublishOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [published, setPublished] = useState(false);
+  const [publishToPlaza, setPublishToPlaza] = useState(false);
+  const [publishAsTemplate, setPublishAsTemplate] = useState(false);
   const [publishSuccessOpen, setPublishSuccessOpen] = useState(false);
   const [copyToastOpen, setCopyToastOpen] = useState(false);
-  const publishMenuRef = useRef<HTMLDivElement>(null);
-  const shareMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const [chatAttachments, setChatAttachments] = useState<File[]>([]);
+
+  useEffect(() => {
+    const query = (initialPrompt || (project?.kind === 'chat' ? project.description : '') || '').trim();
+    if (!query) return;
+
+    if (LIVE) {
+      setClarifyLoading(true);
+      setClarify(null);
+      runClarify(query)
+        .then((data) => setClarify(data))
+        .catch(() => setClarify(null))
+        .finally(() => setClarifyLoading(false));
+      return;
+    }
+
+    const timer = window.setTimeout(() => setClarifyLoading(false), 900);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const publishShareUrl = `https://microapp.qieman.com/ai-lab/index.html#/share/${scenario.key}-${(project?.id ?? 'demo').slice(0, 8)}`;
   const publishFileName = project?.name || scenario.title;
@@ -1638,25 +1805,30 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   };
 
   useEffect(() => {
-    if (!publishOpen && !shareOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (publishOpen && publishMenuRef.current && !publishMenuRef.current.contains(target)) {
-        setPublishOpen(false);
-      }
-      if (shareOpen && shareMenuRef.current && !shareMenuRef.current.contains(target)) {
-        setShareOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [publishOpen, shareOpen]);
-
-  useEffect(() => {
     if (!isRestoring) return;
     const restoreTimer = window.setTimeout(() => setIsRestoring(false), 1100);
     return () => window.clearTimeout(restoreTimer);
   }, [isRestoring]);
+
+  // 真实优先：打开已有项目时自动调真实 runtime，拿真实执行链替换写死 steps；失败则保留 demo 数据
+  useEffect(() => {
+    if (!LIVE) return;
+    if (!project) return;
+    const query = (project.description || requestPrompt || '').trim();
+    if (!query) return;
+    let cancelled = false;
+    runLivePlan(query)
+      .then((steps) => {
+        if (cancelled || !steps.length) return;
+        setActiveSteps(steps);
+        setIsLive(true);
+      })
+      .catch((err) => {
+        console.error('[live] 自动真实运行失败，降级为演示数据', err);
+        setIsLive(false);
+      });
+    return () => { cancelled = true; };
+  }, [project?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1675,13 +1847,29 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       return () => window.clearTimeout(planningTimer);
     }
     if (phase !== 'building') return;
+    const stepDuration = EXECUTION_DURATION_MS / Math.max(activeSteps.length, 1);
     if (activeSteps.length === 0 || currentStep >= activeSteps.length - 1) {
-      const doneTimer = window.setTimeout(() => setPhase('ready'), 800);
+      const doneTimer = window.setTimeout(() => setPhase('ready'), stepDuration);
       return () => window.clearTimeout(doneTimer);
     }
-    const stepTimer = window.setTimeout(() => setCurrentStep((step) => step + 1), 850);
+    const stepTimer = window.setTimeout(() => setCurrentStep((step) => step + 1), stepDuration);
     return () => window.clearTimeout(stepTimer);
   }, [phase, currentStep, activeSteps.length]);
+
+  useEffect(() => {
+    if (phase !== 'building' && phase !== 'ready') return;
+
+    const pendingRecords = pendingCapabilityRecordsRef.current;
+    if (!pendingCapabilityLogRef.current || !pendingRecords?.length) return;
+
+    const visibleCount =
+      phase === 'ready'
+        ? pendingRecords.length
+        : Math.min(Math.max(currentStep + 1, 0), pendingRecords.length);
+
+    if (visibleCount === 0) return;
+    setCapabilityLog((prev) => mergeCapabilityRecords(prev, pendingRecords.slice(0, visibleCount)));
+  }, [phase, currentStep]);
 
   useEffect(() => {
     if (phase !== 'ready') return;
@@ -1690,7 +1878,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       pendingCapabilityLogRef.current = false;
       const records = pendingCapabilityRecordsRef.current ?? activeSteps;
       pendingCapabilityRecordsRef.current = null;
-      setCapabilityLog((prev) => [...prev, ...records]);
+      setCapabilityLog((prev) => mergeCapabilityRecords(prev, records));
       if (!initialPlanCommitted) {
         setInitialPlanSteps([...activeSteps]);
       }
@@ -1815,6 +2003,18 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       setSelectorDone(false);
       clearReplyTimer();
       setIsRefining(true);
+      // 真实模式：需求改了，方向选项也要跟着重新生成
+      if (LIVE) {
+        setClarifyLoading(true);
+        setClarify(null);
+        runClarify(content)
+          .then((data) => setClarify(data))
+          .catch(() => setClarify(null))
+          .finally(() => setClarifyLoading(false));
+      } else {
+        setClarifyLoading(true);
+        window.setTimeout(() => setClarifyLoading(false), 900);
+      }
       replyTimerRef.current = window.setTimeout(() => {
         replyTimerRef.current = null;
         setClarifyingReplyKey((key) => key + 1);
@@ -1859,6 +2059,41 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       onPromoteToProject(project.id, nextPrompt);
     }
     setSelectorDone(true);
+
+    if (LIVE) {
+      // 真实模式：请求已接入盈米 MCP 的 runtime，用真实执行链替换假 steps
+      setActiveSteps([]);
+      setCurrentStep(-1);
+      setPhase('thinking');
+      runLivePlan(nextPrompt)
+        .then((steps) => {
+          const executionSteps = steps.length > 0 ? steps : scenario.steps;
+          setActiveSteps(executionSteps);
+          setInitialPlanSteps(executionSteps);
+          setIsLive(steps.length > 0);
+          pendingCapabilityRecordsRef.current =
+            steps.length > 0
+              ? capabilityRecordsFromSteps(executionSteps)
+              : defaultProjectCapabilities(scenario);
+          pendingCapabilityLogRef.current = true;
+          setCapabilityLog([]);
+          setCurrentStep(0);
+          setPhase('building');
+        })
+        .catch((err) => {
+          console.error('[live] 真实运行失败，降级为演示数据', err);
+          setActiveSteps(scenario.steps);
+          setInitialPlanSteps(scenario.steps);
+          setIsLive(false);
+          pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
+          pendingCapabilityLogRef.current = true;
+          setCapabilityLog([]);
+          setCurrentStep(0);
+          setPhase('building');
+        });
+      return;
+    }
+
     setActiveSteps(scenario.steps);
     setInitialPlanSteps(scenario.steps);
     pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
@@ -1879,7 +2114,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     setPhase('thinking');
   };
 
-  const handleIntentSubmit = (value: { optionId: string; title: string; customText?: string }) => {
+  const handleIntentSubmit = (value: { optionId: string; title: string; customText?: string; prompt?: string }) => {
     if (value.optionId === 'explore') {
       setSelectorDone(true);
       setMessages((prev) => [
@@ -1896,6 +2131,12 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
 
     if (value.optionId === 'custom' && value.customText) {
       startBuilding(value.customText);
+      return;
+    }
+
+    // 真实模式：用后端为这个选项生成的具体指令（针对性，而非写死）
+    if (LIVE && value.prompt) {
+      startBuilding(value.prompt);
       return;
     }
 
@@ -1922,6 +2163,18 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       onCreateProject(content);
       setPhase('clarifying');
       setSelectorDone(false);
+      // 真实模式：让后端 AI 针对这个需求生成理解和针对性方向（替换写死菜单）
+      if (LIVE) {
+        setClarifyLoading(true);
+        setClarify(null);
+        runClarify(content)
+          .then((data) => setClarify(data))
+          .catch(() => setClarify(null))
+          .finally(() => setClarifyLoading(false));
+      } else {
+        setClarifyLoading(true);
+        window.setTimeout(() => setClarifyLoading(false), 900);
+      }
       return;
     }
     if (phase === 'clarifying') {
@@ -2014,6 +2267,14 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const isGenerating =
     isRefining || phase === 'thinking' || phase === 'planning' || phase === 'building';
   const inputEnabled = canSend || isGenerating;
+  const visibleCapabilityLog =
+    capabilityLog.length > 0
+      ? capabilityLog
+      : phase === 'ready'
+        ? isLive && activeSteps.length > 0
+          ? capabilityRecordsFromSteps(activeSteps)
+          : defaultProjectCapabilities(scenario)
+        : capabilityLog;
 
   if (isRestoring) {
     return (
@@ -2139,15 +2400,20 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
 
           {phase === 'clarifying' && (
             <div key={clarifyingReplyKey} className="space-y-3 animate-slide-up">
-              <div className="flex justify-start">
-                <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
-                  我理解你想围绕「{requestPrompt || project?.name || '这个想法'}」做点事情。在正式创建项目前，先选一个最贴近你目标的方向吧。
+              <ClarificationThinking loading={clarifyLoading} prompt={requestPrompt} />
+              {!clarifyLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                    {LIVE && clarify?.understanding
+                      ? clarify.understanding
+                      : `我理解你想围绕「${requestPrompt || project?.name || '这个想法'}」做点事情。在正式创建项目前，先选一个最贴近你目标的方向吧。`}
+                  </div>
                 </div>
-              </div>
-              {!selectorDone && (
+              )}
+              {!selectorDone && !clarifyLoading && (
                 <IntentSelector
                   question="你现在最想先做成哪一件事？"
-                  options={INTENT_OPTIONS}
+                  options={LIVE && clarify?.options ? clarify.options : INTENT_OPTIONS}
                   onSubmit={handleIntentSubmit}
                   onSkip={() => startBuilding(requestPrompt || project?.description || '创建一个金融研究应用')}
                 />
@@ -2169,10 +2435,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             <>
               <PlanCard
                 phase="ready"
-                currentStep={initialPlanSteps.length}
-                steps={initialPlanSteps}
                 title={scenario.title}
+                understanding={scenario.understanding}
+                reasoning={scenario.reasoning}
                 planDescription={scenario.planDescription}
+                planSteps={scenario.planSteps}
               />
               <div data-testid="first-ai-response" className="flex justify-start animate-slide-up">
                 <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
@@ -2191,10 +2458,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               {(phase === 'planning' || phase === 'building' || phase === 'ready') && (
                 <PlanCard
                   phase={phase}
-                  currentStep={currentStep}
-                  steps={activeSteps}
                   title={scenario.title}
+                  understanding={scenario.understanding}
+                  reasoning={scenario.reasoning}
                   planDescription={scenario.planDescription}
+                  planSteps={scenario.planSteps}
                 />
               )}
               {(phase === 'building' || phase === 'ready') && (
@@ -2249,10 +2517,11 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               {(phase === 'planning' || phase === 'building') && (
                 <PlanCard
                   phase={phase}
-                  currentStep={currentStep}
-                  steps={activeSteps}
                   title={scenario.title}
-                  planDescription="根据你的修改需求，重新编排本轮要调用的能力。"
+                  understanding={`你希望在现有「${scenario.title}」基础上继续调整，而不是重新创建一个无关项目。`}
+                  reasoning="我会先判断本轮修改影响的是内容、结构还是交互，再只更新受影响的部分，并保留已经确认的项目目标。"
+                  planDescription="根据本轮修改需求更新受影响的页面与结果，并保持其他部分不变。"
+                  planSteps={scenario.planSteps}
                 />
               )}
               {phase === 'building' && (
@@ -2273,7 +2542,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
         </div>
 
         {layoutMode === 'focus' && (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') && (
-          <ExecutionPlanDock phase={phase} currentStep={currentStep} title={scenario.title} steps={activeSteps} />
+          <ExecutionPlanDock phase={phase} currentStep={currentStep} title={scenario.title} planSteps={scenario.planSteps} />
         )}
 
         <div className={`p-3 ${layoutMode === 'three-column' ? 'border-t border-bolt-light-5' : 'pt-2'}`}>
@@ -2398,81 +2667,19 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="relative" ref={publishMenuRef}>
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => {
-                  if (published) {
-                    setPublishSuccessOpen(true);
-                    setPublishOpen(false);
-                    setShareOpen(false);
-                    return;
-                  }
-                  setPublishOpen((open) => !open);
-                  setShareOpen(false);
+                  setPublishOpen(true);
                 }}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${published ? 'bg-bolt-light-12 text-white' : 'border border-bolt-light-5 bg-white text-bolt-light-12 hover:bg-bolt-light-2'}`}
               >
                 <Globe className="w-4 h-4" />
                 {published ? '已发布' : '发布'}
               </button>
-              {publishOpen && !published && (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[280px] rounded-xl border border-bolt-light-5 bg-white p-4 shadow-xl animate-fade-in">
-                  <h3 className="text-[18px] font-bold tracking-tight text-bolt-light-12">发布</h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-bolt-light-8">
-                    发布后，外部用户可以访问你的应用
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPublished(true);
-                      setPublishOpen(false);
-                      setPublishSuccessOpen(true);
-                    }}
-                    className="mt-4 w-full rounded-xl bg-bolt-light-12 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
-                  >
-                    立即发布
-                  </button>
-                </div>
-              )}
             </div>
 
-            <div className="relative" ref={shareMenuRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShareOpen((open) => !open);
-                  setPublishOpen(false);
-                }}
-                className="flex items-center gap-1.5 rounded-lg bg-bolt-light-3 px-3 py-1.5 text-[13px] font-medium text-bolt-light-11 transition-colors hover:bg-bolt-light-4"
-              >
-                <Share2 className="w-4 h-4" />
-                分享
-              </button>
-              {shareOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[280px] rounded-xl border border-bolt-light-5 bg-white p-4 shadow-xl animate-fade-in">
-                  <h3 className="text-[18px] font-bold tracking-tight text-bolt-light-12">分享</h3>
-                  <p className="mt-2 text-[13px] leading-relaxed text-bolt-light-8">
-                    复制链接后，可邀请同事一起查看这个 Demo 项目
-                  </p>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const shareUrl = `https://lab.yingmi.demo/p/${scenario.key}`;
-                      try {
-                        await navigator.clipboard.writeText(shareUrl);
-                      } catch {
-                        // ignore clipboard failures in demo
-                      }
-                      setShareOpen(false);
-                    }}
-                    className="mt-4 w-full rounded-xl bg-bolt-light-12 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-black"
-                  >
-                    复制分享链接
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -2564,7 +2771,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               )}
             </div>
           ) : viewMode === 'capabilities' ? (
-            <CapabilitiesWorkspace usageSteps={capabilityLog} ready={phase === 'ready' || capabilityLog.length > 0} />
+            <CapabilitiesWorkspace
+              usageSteps={visibleCapabilityLog}
+              ready={phase === 'ready' || visibleCapabilityLog.length > 0}
+            />
           ) : phase === 'waiting' ? (
             <div className="flex h-full w-full items-center justify-center rounded-lg border border-bolt-light-5 bg-white text-sm text-bolt-light-7 shadow-md">
               发送需求后生成项目代码
@@ -2574,6 +2784,124 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           )}
         </div>
       </main>
+
+      {publishOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4" onClick={() => setPublishOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publish-dialog-title"
+            className="w-full max-w-[520px] rounded-2xl bg-white p-6 shadow-2xl animate-fade-in"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="publish-dialog-title" className="text-[20px] font-bold tracking-tight text-bolt-light-12">
+                  {published ? '发布设置' : '发布应用'}
+                </h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-bolt-light-8">
+                  发布后将生成可访问链接。是否进入应用广场，由你决定。
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭"
+                onClick={() => setPublishOpen(false)}
+                className="rounded-full bg-bolt-light-3 p-1.5 text-bolt-light-7 hover:bg-bolt-light-4 hover:text-bolt-light-11"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[13px] font-semibold text-bolt-light-11">访问链接</p>
+                  <p className="mt-0.5 text-[11.5px] text-bolt-light-7">可直接复制访问；“确认”仅保存下方发布设置</p>
+                </div>
+                {published && <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-medium text-bolt-green">已生效</span>}
+              </div>
+              <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-bolt-light-3 px-3 py-2.5">
+                <p className="min-w-0 flex-1 truncate font-mono text-[12px] text-bolt-light-9">{publishShareUrl}</p>
+                <button
+                  type="button"
+                  onClick={copyPublishLink}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-bolt-blue/30 bg-bolt-blue-light px-2.5 py-1.5 text-[12px] font-semibold text-bolt-blue hover:bg-[#dbeafe]"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  复制
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 divide-y divide-bolt-light-5 rounded-xl border border-bolt-light-5">
+              <div className="flex items-center justify-between gap-5 p-4">
+                <div>
+                  <p className="text-[13.5px] font-semibold text-bolt-light-12">上架到应用广场</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-bolt-light-7">开启后，其他用户可以在应用广场发现并查看该应用。</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={publishToPlaza}
+                  aria-label="上架到应用广场"
+                  onClick={() => {
+                    setPublishToPlaza((enabled) => {
+                      if (enabled) setPublishAsTemplate(false);
+                      return !enabled;
+                    });
+                  }}
+                  className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full border-0 p-0 transition-colors ${publishToPlaza ? 'bg-bolt-blue' : 'bg-bolt-light-5'}`}
+                >
+                  <span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${publishToPlaza ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {publishToPlaza && (
+                <div className="flex items-center justify-between gap-5 p-4 animate-fade-in">
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-bolt-light-12">成为模板</p>
+                    <p className="mt-1 text-[12px] leading-relaxed text-bolt-light-7">开启后，其他用户除了查看，还可以复制后继续修改。</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={publishAsTemplate}
+                    aria-label="成为模板"
+                    onClick={() => setPublishAsTemplate((enabled) => !enabled)}
+                    className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full border-0 p-0 transition-colors ${publishAsTemplate ? 'bg-bolt-blue' : 'bg-bolt-light-5'}`}
+                  >
+                    <span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${publishAsTemplate ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {publishToPlaza && (
+              <div className="mt-6 flex justify-end gap-2 animate-fade-in">
+                <button
+                  type="button"
+                  onClick={() => setPublishOpen(false)}
+                  className="rounded-xl border border-bolt-light-5 bg-white px-4 py-2.5 text-[13px] font-semibold text-bolt-light-10 hover:bg-bolt-light-2"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPublished(true);
+                    setPublishOpen(false);
+                    setPublishSuccessOpen(true);
+                  }}
+                  className="rounded-xl bg-bolt-blue px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-bolt-blue-dark"
+                >
+                  确认
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {publishSuccessOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4" onClick={() => setPublishSuccessOpen(false)}>
@@ -2586,7 +2914,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           >
             <div className="flex items-start justify-between gap-3">
               <h3 id="publish-success-title" className="text-[18px] font-bold tracking-tight text-bolt-light-12">
-                分享链接已生成
+                 {publishAsTemplate ? '已上架并设为模板' : publishToPlaza ? '已上架应用广场' : '分享链接已生成'}
               </h3>
               <button
                 type="button"
@@ -2604,6 +2932,14 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
               </span>
               <span className="truncate font-medium">{publishFileName}</span>
             </div>
+
+            <p className="mt-3 text-[12.5px] leading-relaxed text-bolt-light-8">
+              {publishAsTemplate
+                ? '其他用户可以在应用广场查看、复制，并基于该模板继续修改。'
+                : publishToPlaza
+                  ? '其他用户可以在应用广场发现并查看该应用，但不能复制为模板。'
+                  : '该应用不会出现在应用广场，仅获得链接的用户可以访问。'}
+            </p>
 
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-bolt-light-3 px-3 py-2.5">
               <p className="min-w-0 flex-1 truncate font-mono text-[12px] text-bolt-light-9">

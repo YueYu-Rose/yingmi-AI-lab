@@ -48,6 +48,29 @@ import {
 } from 'lucide-react';
 
 const MCP_LIST_URL = '/mcp/盈米MCP_统一可分享版.html#tools/all';
+const SKILLS_LIST_URL = '/mcp/盈米MCP_统一可分享版.html#skills/list';
+
+const CUSTOM_MCP_CONFIG_EXAMPLE = `{
+  "mcpServers": {
+    "your-mcp-name": {
+      "url": "https://your-mcp-server.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`;
+
+const CUSTOM_SKILL_INSTALL_EXAMPLE = `请先获取以下工作流或安装文档的完整内容：
+https://example.com/install-skill-workflow.md
+
+然后严格按照文档要求，逐步完成该Skill的安装和初始化。
+
+以下是安装参数：
+- apiKey：YOUR_API_KEY
+- skills：skill-name-1,skill-name-2
+
+如果安装过程中遇到问题，请说明具体原因并给出修复建议，不要跳过或猜测。`;
 
 const TABS = [
   { id: 'mcp', label: 'MCP', icon: PlugZap },
@@ -75,6 +98,14 @@ interface CustomMcp {
   enabled: boolean;
   icon: typeof Database;
   accent: string;
+  connection?: {
+    transport: 'http' | 'stdio';
+    url?: string;
+    headers?: string;
+    command?: string;
+    args?: string;
+    rawConfig?: string;
+  };
 }
 
 interface CustomSkill {
@@ -410,7 +441,7 @@ function McpCapabilityView({
             rel="noreferrer"
             className="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-bolt-blue hover:bg-bolt-blue-light"
           >
-            查看工具目录（69）
+            MCP清单（69）
             <ArrowRight className="h-4 w-4" />
           </a>
         </div>
@@ -538,9 +569,13 @@ function SkillsCapabilityView({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const query = search.trim().toLowerCase();
-  const officialSkills = CAPABILITIES.skills.filter((item) =>
-    [item.name, item.description, item.meta].some((value) => value.toLowerCase().includes(query)),
-  );
+  const officialMatches = [
+    '盈米skills', '基金研究', '市场解读', '财富规划', '数据可视化', '官方', '平台内置',
+    'fund-screener', 'market-morning-brief', 'wealth-family-advisor', 'portfolio-doctor',
+    'advisor-content-studio', 'wealth-goalcalc', 'design-data-visualization', 'fund-analyst',
+    'wealth-goalmatch', 'wealth-report', 'wealth-healthcheck',
+  ]
+    .some((keyword) => keyword.includes(query));
   const filteredCustom = customSkills.filter((item) =>
     [item.name, item.source, ...item.abilities].some((value) => value.toLowerCase().includes(query)),
   );
@@ -561,26 +596,33 @@ function SkillsCapabilityView({
 
   return (
     <div className="mt-8 space-y-8">
-      {officialSkills.length > 0 && (
+      {officialMatches && (
         <section>
           <h2 className="text-[16px] font-semibold text-bolt-light-11">平台内置能力</h2>
-          <p className="mt-1 text-[12px] text-bolt-light-7">平台提供的 Skills，实际可用状态以账号接入配置为准。</p>
-          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {officialSkills.map((item) => {
-              const Icon = item.icon;
-              return (
-                <article key={item.id} className="flex items-center gap-4 rounded-xl border border-bolt-light-5 bg-white px-5 py-5">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.accent}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-[15px] font-semibold text-bolt-light-12">{item.name}</h3>
-                    <p className="mt-1 text-[12.5px] leading-5 text-bolt-light-8">{item.description}</p>
-                    <span className="mt-1.5 block text-[11.5px] text-bolt-light-7">{item.meta}</span>
-                  </div>
-                </article>
-              );
-            })}
+          <div className="mt-4 flex items-center gap-4 rounded-xl border border-bolt-light-5 bg-white px-5 py-5 transition hover:border-bolt-blue/40">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-bolt-blue text-white">
+              <Workflow className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[17px] font-semibold text-bolt-light-12">盈米Skills</h3>
+                <span className="rounded-md bg-bolt-blue-light px-2 py-1 text-[11px] font-semibold text-bolt-blue">自动调用</span>
+              </div>
+              <p className="mt-1.5 text-[13px] text-bolt-light-8">覆盖基金研究、市场解读、财富规划与数据可视化等专业工作流，帮助智能体完成金融任务。</p>
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-bolt-light-8">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                可用
+              </span>
+            </div>
+            <a
+              href={SKILLS_LIST_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-bolt-blue hover:bg-bolt-blue-light"
+            >
+              Skills清单（11）
+              <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
         </section>
       )}
@@ -597,7 +639,7 @@ function SkillsCapabilityView({
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-bolt-blue bg-white px-4 text-[13px] font-semibold text-bolt-blue transition hover:bg-bolt-blue-light"
           >
             <Plus className="h-4 w-4" />
-            添加自定义 Skill
+            安装 Skills
           </button>
         </div>
 
@@ -988,11 +1030,9 @@ function CustomMcpManager({ items, onChange, onClose }: { items: CustomMcp[]; on
   );
 }
 
-function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) => void; onClose: () => void }) {
-  const [draftName, setDraftName] = useState('');
-  const [draftSource, setDraftSource] = useState('');
-  const [draftAbilities, setDraftAbilities] = useState('');
-
+function AddCustomSkillModal({ onSave: _onSave, onClose }: { onSave: (item: CustomSkill) => void; onClose: () => void }) {
+  const [instruction, setInstruction] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -1000,22 +1040,6 @@ function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
-
-  const saveDraft = () => {
-    if (!draftName.trim() || !draftSource.trim()) return;
-    const abilities = draftAbilities
-      .split(/[，,\n]/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    onSave({
-      id: `custom-skill-${Date.now()}`,
-      name: draftName.trim(),
-      source: draftSource.trim(),
-      abilities: abilities.length > 0 ? abilities : ['等待读取 Skill 能力说明'],
-      enabled: false,
-    });
-    onClose();
-  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-6 py-8" onMouseDown={onClose}>
@@ -1028,53 +1052,43 @@ function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) 
       >
         <header className="flex items-start gap-5 border-b border-bolt-light-5 px-7 py-6">
           <div className="min-w-0 flex-1">
-            <h2 id="add-custom-skill-title" className="text-[20px] font-bold text-bolt-light-12">添加自定义 Skill</h2>
-            <p className="mt-1 text-[13px] text-bolt-light-8">填写 Skill 的名称、来源与能力说明；保存后需手动启用。</p>
+            <h2 id="add-custom-skill-title" className="text-[20px] font-bold text-bolt-light-12">安装 Skills</h2>
+            <p className="mt-1 text-[13px] text-bolt-light-8">粘贴第三方Skill提供方给出的安装指令。盈米Skills由平台自动调用，无需在这里安装。</p>
           </div>
           <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg p-2 text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-12">
             <X className="h-5 w-5" />
           </button>
         </header>
-        <div className="space-y-4 px-7 py-6">
+        <div className="space-y-3 px-7 py-6">
           <label className="block">
-            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">Skill 名称</span>
-            <input
-              autoFocus
-              value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              placeholder="例如 portfolio-review"
-              className="h-11 w-full rounded-lg border border-bolt-light-5 px-3 text-[13px] outline-none focus:border-bolt-blue"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">来源地址</span>
-            <input
-              value={draftSource}
-              onChange={(event) => setDraftSource(event.target.value)}
-              placeholder="仓库地址、Skill 文件地址或内部来源"
-              className="h-11 w-full rounded-lg border border-bolt-light-5 px-3 text-[13px] outline-none focus:border-bolt-blue"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[12px] font-medium text-bolt-light-9">能力明细（可选）</span>
+            <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">安装指令</span>
             <textarea
-              value={draftAbilities}
-              onChange={(event) => setDraftAbilities(event.target.value)}
-              placeholder="使用逗号或换行分隔，例如：组合复盘、风险检查、结论生成"
-              rows={3}
-              className="w-full resize-none rounded-lg border border-bolt-light-5 px-3 py-2.5 text-[13px] outline-none focus:border-bolt-blue"
+              autoFocus
+              value={instruction}
+              onChange={(event) => {
+                setInstruction(event.target.value);
+                setSubmitted(false);
+              }}
+              rows={13}
+              placeholder={CUSTOM_SKILL_INSTALL_EXAMPLE}
+              className="w-full resize-none rounded-xl border border-bolt-light-5 bg-white px-4 py-3 font-mono text-[12px] leading-5 outline-none focus:border-bolt-blue"
             />
           </label>
+          {submitted ? (
+            <p className="rounded-lg bg-bolt-blue-light px-4 py-3 text-[12px] leading-5 text-bolt-blue">Demo已记录安装任务。接入真实Agent后，此处将展示读取工作流、安装和初始化的执行过程。</p>
+          ) : (
+            <p className="rounded-lg bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-800">请从第三方Skill提供方获取真实安装指令；如果指令包含API Key，请确认使用环境可信。当前Demo不会执行真实安装。</p>
+          )}
         </div>
         <footer className="flex justify-end gap-3 border-t border-bolt-light-5 px-7 py-4">
           <button type="button" onClick={onClose} className="h-10 rounded-lg border border-bolt-light-5 px-4 text-[13px] font-medium text-bolt-light-9 hover:bg-bolt-light-2">取消</button>
           <button
             type="button"
-            onClick={saveDraft}
-            disabled={!draftName.trim() || !draftSource.trim()}
+            disabled={!instruction.trim()}
+            onClick={() => setSubmitted(true)}
             className="h-10 rounded-lg bg-bolt-blue px-4 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            保存 Skill
+            交给AI安装
           </button>
         </footer>
       </section>
@@ -1083,8 +1097,8 @@ function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) 
 }
 
 function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => void; onClose: () => void }) {
-  const [draftName, setDraftName] = useState('');
-  const [draftUrl, setDraftUrl] = useState('');
+  const [rawConfig, setRawConfig] = useState('');
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1095,15 +1109,37 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
   }, [onClose]);
 
   const saveDraft = () => {
-    if (!draftName.trim() || !draftUrl.trim()) return;
+    let parsed: { mcpServers?: Record<string, { url?: string; headers?: Record<string, string> }> };
+    try {
+      parsed = JSON.parse(rawConfig);
+    } catch {
+      setValidationError('JSON格式不正确，请检查括号、逗号和引号。');
+      return;
+    }
+    const entry = Object.entries(parsed.mcpServers ?? {})[0];
+    if (!entry) {
+      setValidationError('配置中没有找到mcpServers。');
+      return;
+    }
+    const [name, config] = entry;
+    if (!config.url) {
+      setValidationError('配置中缺少MCP服务地址url。');
+      return;
+    }
     onSave({
       id: `custom-${Date.now()}`,
-      name: draftName.trim(),
-      description: `连接地址：${draftUrl.trim()}`,
+      name,
+      description: `HTTP连接：${config.url}`,
       tools: ['等待首次同步工具清单'],
       enabled: false,
       icon: Database,
       accent: 'bg-slate-100 text-slate-600',
+      connection: {
+        transport: 'http',
+        url: config.url,
+        headers: JSON.stringify(config.headers),
+        rawConfig,
+      },
     });
     onClose();
   };
@@ -1120,35 +1156,32 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
         <header className="flex items-start gap-5 border-b border-bolt-light-5 px-7 py-6">
           <div className="min-w-0 flex-1">
             <h2 id="add-custom-mcp-title" className="text-[22px] font-bold text-bolt-light-12">添加自定义 MCP</h2>
-            <p className="mt-1 text-[13px] text-bolt-light-8">填写连接信息。添加后可在“我的扩展能力”中启用调用。</p>
+            <p className="mt-1 text-[13px] text-bolt-light-8">粘贴第三方MCP提供的完整配置。盈米MCP由平台自动调用，无需在这里添加。</p>
           </div>
           <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg p-2 text-bolt-light-8 hover:bg-bolt-light-3 hover:text-bolt-light-12">
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="space-y-5 px-7 py-6">
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto px-7 py-6">
           <label className="block">
-            <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">MCP 名称</span>
-            <input
+            <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">MCP配置</span>
+            <textarea
               autoFocus
-              value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              placeholder="例如：enterprise-research-mcp"
-              className="h-11 w-full rounded-lg border border-bolt-light-5 bg-white px-3 text-[13px] outline-none focus:border-bolt-blue"
+              value={rawConfig}
+              onChange={(event) => {
+                setRawConfig(event.target.value);
+                setValidationError('');
+              }}
+              rows={14}
+              placeholder={CUSTOM_MCP_CONFIG_EXAMPLE}
+              spellCheck={false}
+              className={`w-full resize-none rounded-xl border bg-white px-4 py-3 font-mono text-[12px] leading-5 outline-none ${validationError ? 'border-red-400' : 'border-bolt-light-5 focus:border-bolt-blue'}`}
             />
           </label>
-          <label className="block">
-            <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">服务地址</span>
-            <input
-              value={draftUrl}
-              onChange={(event) => setDraftUrl(event.target.value)}
-              placeholder="https://..."
-              className="h-11 w-full rounded-lg border border-bolt-light-5 bg-white px-3 text-[13px] outline-none focus:border-bolt-blue"
-            />
-          </label>
+          {validationError && <p className="text-[12px] text-red-600">{validationError}</p>}
           <p className="rounded-lg bg-bolt-light-2 px-4 py-3 text-[11.5px] leading-relaxed text-bolt-light-8">
-            新连接默认关闭。保存后返回当前页面确认信息，再决定是否允许智能体调用。
+            请从第三方MCP服务提供方获取实际配置，并替换示例中的服务地址和鉴权信息。新连接默认关闭。
           </p>
         </div>
 
@@ -1159,10 +1192,10 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
           <button
             type="button"
             onClick={saveDraft}
-            disabled={!draftName.trim() || !draftUrl.trim()}
+            disabled={!rawConfig.trim()}
             className="h-10 rounded-lg bg-bolt-blue px-4 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            保存连接
+            保存配置
           </button>
         </footer>
       </section>
