@@ -5,12 +5,14 @@ export interface IntentOption {
   id: string;
   title: string;
   description: string;
+  /** 真实模式：选中后交给构建引擎（/api/run）的具体指令；缺省时回退到固定逻辑 */
+  prompt?: string;
 }
 
 interface IntentSelectorProps {
   question: string;
   options: IntentOption[];
-  onSubmit: (value: { optionId: string; title: string; customText?: string }) => void;
+  onSubmit: (value: { optionId: string; title: string; customText?: string; prompt?: string }) => void;
   onSkip?: () => void;
 }
 
@@ -29,7 +31,7 @@ export default function IntentSelector({ question, options, onSubmit, onSkip }: 
     }
     const option = options.find((item) => item.id === selectedId);
     if (!option) return;
-    onSubmit({ optionId: option.id, title: option.title });
+    onSubmit({ optionId: option.id, title: option.title, prompt: option.prompt });
   };
 
   return (

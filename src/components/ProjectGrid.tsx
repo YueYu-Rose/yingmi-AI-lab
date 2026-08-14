@@ -157,7 +157,7 @@ export default function ProjectGrid({ view, projects, onOpenProject, onToggleSta
         <div className="mb-6 mt-7 flex flex-wrap items-end justify-between gap-5 border-b border-bolt-light-5">
           <div className="flex items-center gap-1" role="tablist" aria-label="工作空间分类">
             {([
-              ['workspace', '全部项目', FolderKanban],
+              ['workspace', '全部', FolderKanban],
               ['starred', '已加星标', Star],
               ['recent', '最近查看', Clock],
               ['shared', '共享给你', Users],

@@ -5,7 +5,7 @@ import PromptBox from '@/components/PromptBox';
 import ProjectGrid from '@/components/ProjectGrid';
 import ToolsPage from '@/pages/ToolsPage';
 import PlazaPage from '@/pages/PlazaPage';
-import type { SidebarView, Project } from '@/types';
+import type { CopiedApplicationTemplate, SidebarView, Project } from '@/types';
 
 interface FrontPageProps {
   activeView: SidebarView;
@@ -15,6 +15,7 @@ interface FrontPageProps {
   onTogglePin: (id: string) => void;
   onOpenProject: (id: string) => void;
   onNewProject: (prompt: string) => void;
+  onCopyTemplate: (template: CopiedApplicationTemplate) => void;
   onRenameProject: (id: string, newName: string) => void;
   onDeleteProject: (id: string) => void;
 }
@@ -31,7 +32,7 @@ const viewFilters: Record<SidebarView, (p: Project) => boolean> = {
 };
 
 
-export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onTogglePin, onOpenProject, onNewProject, onRenameProject, onDeleteProject }: FrontPageProps) {
+export default function FrontPage({ activeView, onViewChange, projects, onToggleStar, onTogglePin, onOpenProject, onNewProject, onCopyTemplate, onRenameProject, onDeleteProject }: FrontPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [plazaDetailOpen, setPlazaDetailOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -146,7 +147,7 @@ export default function FrontPage({ activeView, onViewChange, projects, onToggle
           ) : isTools ? (
             <ToolsPage />
           ) : isPlaza ? (
-            <PlazaPage onUseTemplate={onNewProject} onDetailChange={handlePlazaDetailChange} />
+            <PlazaPage onUseTemplate={onCopyTemplate} onDetailChange={handlePlazaDetailChange} />
           ) : (
             <ProjectGrid
               view={activeView}

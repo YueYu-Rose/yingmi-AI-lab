@@ -78,7 +78,7 @@ export default function Sidebar({ activeView, onViewChange, onOpenProject, onTog
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileHomeOpen, setProfileHomeOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [displayName, setDisplayName] = useState('张伟');
+  const [displayName, setDisplayName] = useState('余悦');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');

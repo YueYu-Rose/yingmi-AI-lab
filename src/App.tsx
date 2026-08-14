@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import FrontPage from '@/pages/FrontPage';
 import DesignPage from '@/pages/DesignPage';
-import type { Page, Project, SidebarView } from '@/types';
+import type { CopiedApplicationTemplate, Page, Project, SidebarView } from '@/types';
 
 const familyFinanceChatSeed: Project = {
   id: 'c1',
@@ -239,6 +239,33 @@ function App() {
     }
   };
 
+  const handleCopyTemplate = (template: CopiedApplicationTemplate) => {
+    const copiedProject: Project = {
+      id: `copy-${template.id}-${Date.now()}`,
+      kind: 'project',
+      name: `${template.title}（副本）`,
+      description: `请使用「${template.title}」模板创建应用，完整复制原应用的全部页面、内容与交互。`,
+      starred: false,
+      lastViewed: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      templateSnapshot: template,
+      templateCopyPending: true,
+    };
+    setProjects((prev) => [copiedProject, ...prev]);
+    setActiveProject(copiedProject);
+    setInitialPrompt(null);
+    setCurrentPage('design');
+  };
+
+  const handleTemplateCopyReady = (id: string) => {
+    setProjects((prev) => prev.map((item) =>
+      item.id === id ? { ...item, templateCopyPending: false } : item
+    ));
+    setActiveProject((prev) =>
+      prev?.id === id ? { ...prev, templateCopyPending: false } : prev
+    );
+  };
+
   const handleRenameProject = (id: string, newName: string) => {
     setProjects((prev) =>
       prev.map((p) => (p.id === id ? { ...p, name: newName } : p))
@@ -281,6 +308,7 @@ function App() {
         initialPrompt={initialPrompt}
         onCreateProject={handleCreateProjectFromDraft}
         onPromoteToProject={handlePromoteToProject}
+        onTemplateCopyReady={handleTemplateCopyReady}
         onBack={handleBack}
       />
     );
@@ -295,6 +323,7 @@ function App() {
       onTogglePin={handleTogglePin}
       onOpenProject={handleOpenProject}
       onNewProject={handleNewProject}
+      onCopyTemplate={handleCopyTemplate}
       onRenameProject={handleRenameProject}
       onDeleteProject={handleDeleteProject}
     />

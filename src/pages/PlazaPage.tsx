@@ -23,6 +23,8 @@ import {
   Users,
   Workflow,
 } from 'lucide-react';
+import { loadPublishedPlazaApps } from '@/lib/plazaPublishing';
+import type { CopiedApplicationTemplate } from '@/types';
 
 type Category = '基金研究' | '组合诊断' | '市场内容' | '财富规划';
 type ToolKind = 'MCP' | 'Skills' | 'Agent' | '组件';
@@ -43,6 +45,8 @@ interface PlazaTemplate {
   sourceUrl?: string;
   accent?: 'orange' | 'blue';
   supportedDevices: PreviewMode[];
+  isTemplate?: boolean;
+  publishedAt?: string;
 }
 
 const toolTabs: { id: ToolKind; icon: typeof Database }[] = [
@@ -131,23 +135,6 @@ const initialTemplates: PlazaTemplate[] = [
     },
   },
   {
-    id: 'portfolio-health',
-    title: '组合健康诊断',
-    author: '林小满',
-    category: '组合诊断',
-    description: '从资产配置、相关性和集中度出发，识别组合中的主要风险，并给出易于理解的诊断摘要。',
-    cover: '/plaza/portfolio-health.png',
-    likes: 286,
-    views: 2100,
-    supportedDevices: ['desktop', 'mobile'],
-    tools: {
-      MCP: ['基金诊断', '基金相关性分析'],
-      Skills: ['portfolio-doctor', 'risk-insight'],
-      Agent: ['组合诊断 Agent'],
-      组件: ['健康评分', '相关性热力图', '风险预警'],
-    },
-  },
-  {
     id: 'market-brief',
     title: '市场早报生成器',
     author: '盈米内容实验室',
@@ -209,7 +196,8 @@ function getToolDescription(kind: ToolKind, tool: string) {
 function loadTemplates(): PlazaTemplate[] {
   try {
     const saved = JSON.parse(window.localStorage.getItem(PLAZA_METRICS_KEY) ?? '{}') as Record<string, { likes?: number; views?: number }>;
-    return initialTemplates.map((template) => ({
+    const published = loadPublishedPlazaApps();
+    return [...published, ...initialTemplates].map((template) => ({
       ...template,
       likes: saved[template.id]?.likes ?? template.likes,
       views: saved[template.id]?.views ?? template.views,
@@ -220,7 +208,7 @@ function loadTemplates(): PlazaTemplate[] {
 }
 
 interface PlazaPageProps {
-  onUseTemplate: (prompt: string) => void;
+  onUseTemplate: (template: CopiedApplicationTemplate) => void;
   onDetailChange?: (open: boolean) => void;
 }
 
@@ -248,6 +236,16 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
   useEffect(() => {
     window.localStorage.setItem(PLAZA_LIKES_KEY, JSON.stringify(likedIds));
   }, [likedIds]);
+
+  useEffect(() => {
+    const syncPublished = () => setTemplates(loadTemplates());
+    window.addEventListener('yingmi-plaza-published', syncPublished);
+    window.addEventListener('storage', syncPublished);
+    return () => {
+      window.removeEventListener('yingmi-plaza-published', syncPublished);
+      window.removeEventListener('storage', syncPublished);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -293,7 +291,16 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
         }}
         onOpenAuthor={() => openAuthor(selected.author)}
         onToggleLike={() => toggleLike(selected.id)}
-        onUse={() => onUseTemplate(`请使用「${selected.title}」模板，基于我的需求创建一个金融应用。保留模板的信息架构与可视化方式，并先向我确认需要替换的数据和内容。`)}
+        onUse={selected.isTemplate !== false ? () => onUseTemplate({
+          id: selected.id,
+          title: selected.title,
+          author: selected.author,
+          category: selected.category,
+          description: selected.description,
+          sourceUrl: selected.sourceUrl,
+          supportedDevices: selected.supportedDevices,
+          tools: selected.tools,
+        }) : undefined}
       />
     );
   }
@@ -323,7 +330,7 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
         <header>
           <h1 className="text-[30px] font-bold tracking-tight text-bolt-light-12">应用广场</h1>
           <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-bolt-light-8">
-            发现盈米与社区用户发布的金融应用模板，找到灵感后即可继续创建。
+            发现盈米与社区用户发布的金融应用；标记为模板的应用还可以继续创建。
           </p>
         </header>
 
@@ -353,7 +360,7 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索模板或作者"
+              placeholder="搜索应用或作者"
               className="h-10 w-full rounded-xl border border-bolt-light-5 bg-white pl-9 pr-3 text-[13px] text-bolt-light-12 outline-none transition placeholder:text-bolt-light-7 focus:border-bolt-blue"
             />
           </label>
@@ -370,8 +377,8 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
                   }}
                   className="block w-full overflow-hidden rounded-2xl border border-bolt-light-5 bg-bolt-light-2 text-left shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:border-bolt-light-6 group-hover:shadow-md"
                 >
-                  <div className="aspect-[16/9] overflow-hidden bg-white p-2 sm:p-3">
-                    <img src={item.cover} alt={`${item.title}应用首页缩略图`} className="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.01]" />
+                  <div className="aspect-[16/9] overflow-hidden bg-white">
+                    <ApplicationFirstScreen template={item} thumbnail />
                   </div>
                 </button>
                 <div className="mt-3 flex items-start justify-between gap-3 px-1">
@@ -401,7 +408,7 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
         ) : (
           <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
             <Search className="h-8 w-8 text-bolt-light-6" />
-            <p className="mt-3 text-[14px] font-medium text-bolt-light-10">没有找到匹配的模板</p>
+            <p className="mt-3 text-[14px] font-medium text-bolt-light-10">没有找到匹配的应用</p>
             <button type="button" onClick={() => setQuery('')} className="mt-2 text-[13px] text-bolt-blue hover:underline">清除搜索</button>
           </div>
         )}
@@ -495,8 +502,8 @@ function AuthorProfile({
               {templates.map((template) => (
                 <article key={template.id} className="group min-w-0">
                   <button type="button" onClick={() => onOpenTemplate(template.id)} className="block w-full overflow-hidden rounded-2xl border border-bolt-light-5 bg-bolt-light-2 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-bolt-light-6 hover:shadow-md">
-                    <div className="aspect-[16/9] overflow-hidden bg-white p-2.5">
-                      <img src={template.cover} alt={`${template.title}应用首页缩略图`} className="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.01]" />
+                    <div className="aspect-[16/9] overflow-hidden bg-white">
+                      <ApplicationFirstScreen template={template} thumbnail />
                     </div>
                   </button>
                   <div className="mt-3 px-1">
@@ -535,7 +542,7 @@ function TemplateDetail({
   liked: boolean;
   onBack: () => void;
   onOpenAuthor: () => void;
-  onUse: () => void;
+  onUse?: () => void;
   onToggleLike: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -602,13 +609,15 @@ function TemplateDetail({
                 </a>
               )}
               <span className="inline-flex items-center gap-1.5"><Eye className="h-4 w-4" /> {formatCount(template.views)}</span>
-              <button
-                type="button"
-                onClick={onUse}
-                className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-bolt-blue px-3 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95"
-              >
-                <Sparkles className="h-3.5 w-3.5" /> 使用模板
-              </button>
+              {onUse && (
+                <button
+                  type="button"
+                  onClick={onUse}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-bolt-blue px-3 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> 使用模板
+                </button>
+              )}
             </div>
 
             <div className="mt-7">
@@ -676,17 +685,7 @@ function TemplateDetail({
 
               <div className="flex min-h-[620px] items-start justify-center overflow-auto rounded-2xl border border-bolt-light-5 bg-[#e9ebef] p-3 shadow-inner lg:p-5">
                 <div className={`overflow-hidden bg-white shadow-xl transition-[width,border-radius] duration-300 ${previewMode === 'mobile' ? 'w-[390px] max-w-full rounded-[28px] border-[8px] border-bolt-light-12' : 'w-full rounded-xl border border-bolt-light-5'}`}>
-                  {template.sourceUrl ? (
-                    <iframe
-                      key={`${template.id}-${previewMode}`}
-                      src={template.sourceUrl}
-                      title={`${template.title}${previewMode === 'mobile' ? '手机' : 'PC'}版应用预览`}
-                      className="h-[720px] w-full bg-white"
-                      sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-                    />
-                  ) : (
-                    <InteractiveTemplatePreview template={template} compact={previewMode === 'mobile'} />
-                  )}
+                  <ApplicationFirstScreen template={template} compact={previewMode === 'mobile'} />
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-[11.5px] text-bolt-light-7">
@@ -700,6 +699,54 @@ function TemplateDetail({
   );
 }
 
+function ApplicationFirstScreen({
+  template,
+  compact = false,
+  thumbnail = false,
+}: {
+  template: PlazaTemplate;
+  compact?: boolean;
+  thumbnail?: boolean;
+}) {
+  if (template.sourceUrl) {
+    return (
+      <div className={thumbnail ? 'pointer-events-none h-full w-full origin-top-left overflow-hidden' : 'h-[720px] w-full'}>
+        <iframe
+          src={template.sourceUrl}
+          title={`${template.title}${thumbnail ? '首页缩略图' : '应用预览'}`}
+          className={thumbnail ? 'h-[720px] w-full border-0 bg-white' : 'h-full w-full border-0 bg-white'}
+          style={thumbnail ? { transform: 'scale(0.5)', transformOrigin: 'top left', width: '200%', height: '200%' } : undefined}
+          tabIndex={thumbnail ? -1 : 0}
+          sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+        />
+      </div>
+    );
+  }
+
+  if (thumbnail) {
+    return (
+      <div className="pointer-events-none h-full w-full overflow-hidden">
+        <div className="h-[720px] w-[1280px] origin-top-left" style={{ transform: 'scale(0.43)' }}>
+          <InteractiveTemplatePreview template={template} compact={false} />
+        </div>
+      </div>
+    );
+  }
+
+  return <InteractiveTemplatePreview template={template} compact={compact} />;
+}
+
+export function CopiedApplicationPreview({ template }: { template: CopiedApplicationTemplate }) {
+  const previewTemplate: PlazaTemplate = {
+    ...template,
+    cover: '',
+    likes: 0,
+    views: 0,
+    isTemplate: true,
+  };
+  return <ApplicationFirstScreen template={previewTemplate} />;
+}
+
 function InteractiveTemplatePreview({
   template,
   compact,
@@ -709,8 +756,71 @@ function InteractiveTemplatePreview({
 }) {
   const [activePanel, setActivePanel] = useState<'overview' | 'analysis' | 'tools'>('overview');
   const [analysisReady, setAnalysisReady] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [riskLevel, setRiskLevel] = useState('均衡');
+  const [rangeValue, setRangeValue] = useState(3);
+  const [selectedResult, setSelectedResult] = useState(0);
   const accentButton = 'bg-bolt-blue';
   const accentText = 'text-bolt-blue';
+
+  const previewConfig = useMemo(() => {
+    if (template.category === '组合诊断') return {
+      eyebrow: 'PORTFOLIO HEALTH',
+      title: '组合健康检查',
+      subjectLabel: '基金组合',
+      placeholder: '输入基金名称，用逗号分隔',
+      rangeLabel: '持仓基金数量',
+      rangeUnit: '只',
+      action: '开始诊断',
+      metrics: ['组合健康度', '集中度', '相关性风险', '风险提示'],
+      rows: ['资产配置均衡度', '基金持仓重叠', '收益相关性', '历史回撤水平'],
+    };
+    if (template.category === '市场内容') return {
+      eyebrow: 'MARKET BRIEF',
+      title: '生成今日市场早报',
+      subjectLabel: '关注主题',
+      placeholder: '例如：A股、债券、海外市场',
+      rangeLabel: '早报模块数量',
+      rangeUnit: '个',
+      action: '生成早报',
+      metrics: ['市场温度', '重要事件', '上涨行业', '风险关注'],
+      rows: ['市场概览', '核心事件', '行业表现', '今日关注'],
+    };
+    if (template.category === '财富规划') return {
+      eyebrow: 'WEALTH PLAN',
+      title: '测算家庭财富目标',
+      subjectLabel: '财富目标',
+      placeholder: '例如：10年后准备300万元养老资金',
+      rangeLabel: '规划期限',
+      rangeUnit: '年',
+      action: '开始测算',
+      metrics: ['目标达成率', '资金缺口', '建议月投入', '风险等级'],
+      rows: ['家庭现金流', '保障准备', '目标进度', '资产配置'],
+    };
+    return {
+      eyebrow: 'FUND RESEARCH',
+      title: '创建基金研究任务',
+      subjectLabel: '研究对象',
+      placeholder: '输入基金名称或代码',
+      rangeLabel: '对比基金数量',
+      rangeUnit: '只',
+      action: '生成研究',
+      metrics: ['候选基金', '近一年收益', '最大回撤', '综合评分'],
+      rows: ['业绩表现', '风险收益', '持仓结构', '基金经理'],
+    };
+  }, [template.category]);
+
+  const metricValues = useMemo(() => {
+    if (template.category === '市场内容') return [`${62 + rangeValue}`, `${rangeValue + 2} 条`, `${rangeValue + 1} 个`, `${Math.max(1, 5 - rangeValue)} 项`];
+    if (template.category === '财富规划') return [`${68 + rangeValue * 3}%`, `${Math.max(18, 92 - rangeValue * 7)} 万`, `${3600 + rangeValue * 420} 元`, riskLevel];
+    if (template.category === '组合诊断') return [`${76 + rangeValue * 2} / 100`, `${34 + rangeValue}%`, riskLevel === '稳健' ? '较低' : riskLevel === '进取' ? '较高' : '中等', `${Math.max(1, 6 - rangeValue)} 项`];
+    return [`${rangeValue * 4 + 9} 只`, `+${(6.2 + rangeValue * 0.7).toFixed(1)}%`, `-${(4.8 + rangeValue * 0.5).toFixed(1)}%`, `${78 + rangeValue * 2}`];
+  }, [rangeValue, riskLevel, template.category]);
+
+  const runAnalysis = () => {
+    setAnalysisReady(true);
+    setActivePanel('analysis');
+  };
 
   return (
     <div className="min-h-[720px] bg-white">
@@ -741,23 +851,40 @@ function InteractiveTemplatePreview({
 
       <div className={compact ? 'p-4' : 'p-7'}>
         {activePanel === 'overview' && (
-          <div>
-            <button type="button" onClick={() => setActivePanel('analysis')} className={`group block w-full overflow-hidden rounded-xl border border-bolt-light-5 bg-white p-2 text-left ${compact ? 'h-44' : 'aspect-[16/9]'}`}>
-              <img src={template.cover} alt={`${template.title}应用首页`} className="h-full w-full object-contain object-center transition group-hover:scale-[1.01]" />
-            </button>
-            <div className={`mt-5 grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-3'}`}>
-              {['连接数据', '生成分析', '查看结论'].map((step, index) => (
-                <button
-                  key={step}
-                  type="button"
-                  onClick={() => {
-                    if (index > 0) setAnalysisReady(true);
-                    setActivePanel(index === 0 ? 'tools' : 'analysis');
-                  }}
-                  className="rounded-xl border border-bolt-light-5 bg-bolt-light-2 p-4 text-left transition hover:border-bolt-light-7 hover:bg-white"
-                >
-                  <span className={`text-[11px] font-semibold ${accentText}`}>0{index + 1}</span>
-                  <span className="mt-2 block text-[13px] font-semibold text-bolt-light-11">{step}</span>
+          <div className="space-y-5">
+            <section className={`overflow-hidden rounded-2xl bg-gradient-to-br from-[#071d3c] via-[#0b315e] to-[#1268a8] text-white ${compact ? 'p-5' : 'p-8'}`}>
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-blue-200">{previewConfig.eyebrow}</p>
+              <h4 className={`mt-3 font-semibold ${compact ? 'text-[21px]' : 'text-[28px]'}`}>{previewConfig.title}</h4>
+              <p className="mt-2 max-w-xl text-[12px] leading-6 text-blue-100">{template.description}</p>
+            </section>
+
+            <section className="rounded-2xl border border-bolt-light-5 bg-white p-5 shadow-sm">
+              <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_150px]'}`}>
+                <label className="block">
+                  <span className="mb-2 block text-[11.5px] font-medium text-bolt-light-9">{previewConfig.subjectLabel}</span>
+                  <input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={previewConfig.placeholder} className="h-11 w-full rounded-xl border border-bolt-light-5 px-3 text-[12px] outline-none transition focus:border-bolt-blue" />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[11.5px] font-medium text-bolt-light-9">风险偏好</span>
+                  <select value={riskLevel} onChange={(event) => setRiskLevel(event.target.value)} className="h-11 w-full rounded-xl border border-bolt-light-5 bg-white px-3 text-[12px] outline-none focus:border-bolt-blue">
+                    <option>稳健</option><option>均衡</option><option>进取</option>
+                  </select>
+                </label>
+              </div>
+              <label className="mt-5 block">
+                <span className="flex items-center justify-between text-[11.5px] font-medium text-bolt-light-9"><span>{previewConfig.rangeLabel}</span><strong className="text-bolt-blue">{rangeValue}{previewConfig.rangeUnit}</strong></span>
+                <input type="range" min="1" max="5" value={rangeValue} onChange={(event) => setRangeValue(Number(event.target.value))} className="mt-3 w-full accent-blue-600" />
+              </label>
+              <button type="button" onClick={runAnalysis} className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-bolt-blue text-[12px] font-semibold text-white transition hover:brightness-95">
+                <Sparkles className="h-4 w-4" /> {previewConfig.action}
+              </button>
+            </section>
+
+            <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
+              {previewConfig.metrics.map((label, index) => (
+                <button key={label} type="button" onClick={() => setSelectedResult(index)} className={`rounded-xl border p-4 text-left transition ${selectedResult === index ? 'border-bolt-blue bg-blue-50' : 'border-bolt-light-5 bg-white hover:border-bolt-light-7'}`}>
+                  <span className="text-[10.5px] text-bolt-light-7">{label}</span>
+                  <strong className="mt-2 block text-[15px] text-bolt-light-12">{metricValues[index]}</strong>
                 </button>
               ))}
             </div>
@@ -770,29 +897,29 @@ function InteractiveTemplatePreview({
               <div className="flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-bolt-light-6 bg-bolt-light-2 px-6 text-center">
                 <BarChart3 className={`h-8 w-8 ${accentText}`} />
                 <h4 className="mt-4 text-[15px] font-semibold text-bolt-light-12">准备生成分析结果</h4>
-                <p className="mt-2 max-w-sm text-[12px] leading-6 text-bolt-light-7">点击后将使用模板中的 MCP、Skills 与 Agent 生成演示结果。</p>
-                <button type="button" onClick={() => setAnalysisReady(true)} className={`mt-5 rounded-lg px-4 py-2.5 text-[12px] font-semibold text-white ${accentButton}`}>
-                  开始分析
+                <p className="mt-2 max-w-sm text-[12px] leading-6 text-bolt-light-7">返回应用首页填写条件后，即可生成本次分析结果。</p>
+                <button type="button" onClick={() => setActivePanel('overview')} className={`mt-5 rounded-lg px-4 py-2.5 text-[12px] font-semibold text-white ${accentButton}`}>
+                  返回填写条件
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
-                  {[
-                    ['综合评分', '82 / 100'],
-                    ['已识别项目', '4'],
-                    ['风险提示', '2'],
-                    ['数据完整度', '96%'],
-                  ].map(([label, value]) => (
+                  {previewConfig.metrics.map((label, index) => (
                     <div key={label} className="rounded-xl border border-bolt-light-5 bg-white p-4 shadow-sm">
                       <p className="text-[10.5px] text-bolt-light-7">{label}</p>
-                      <p className="mt-2 text-[17px] font-semibold text-bolt-light-12">{value}</p>
+                      <p className="mt-2 text-[17px] font-semibold text-bolt-light-12">{metricValues[index]}</p>
                     </div>
                   ))}
                 </div>
                 <div className="rounded-xl border border-bolt-light-5 p-5">
                   <h4 className="text-[14px] font-semibold text-bolt-light-12">分析摘要</h4>
-                  <p className="mt-3 text-[12px] leading-7 text-bolt-light-8">演示结果已根据模板的信息架构生成。你可以继续使用模板，并在创建过程中替换为自己的基金、组合或市场数据。</p>
+                  <p className="mt-3 text-[12px] leading-7 text-bolt-light-8">已根据“{subject || previewConfig.placeholder}”、{riskLevel}偏好和{rangeValue}{previewConfig.rangeUnit}参数生成结果。点击下方项目可查看不同分析维度。</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {previewConfig.rows.map((row, index) => (
+                      <button key={row} type="button" onClick={() => setSelectedResult(index)} className={`rounded-lg px-3 py-2.5 text-left text-[11.5px] transition ${selectedResult === index ? 'bg-bolt-blue-light font-medium text-bolt-blue' : 'bg-bolt-light-2 text-bolt-light-9 hover:bg-bolt-light-4'}`}>{row}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

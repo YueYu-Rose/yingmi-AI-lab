@@ -78,7 +78,7 @@ export function EditableBlock({
   const needsClip = /\boverflow-hidden\b/.test(className);
 
   return (
-    <div className={`relative pt-2.5 ${selected ? 'z-30 pb-[56px]' : 'z-0'}`}>
+    <div className={`relative pt-2.5 ${selected ? 'z-30' : 'z-0'}`}>
       <div
         role="button"
         tabIndex={0}
@@ -103,7 +103,7 @@ export function EditableBlock({
         </div>
       </div>
       {selected && (
-        <div className="pointer-events-none absolute inset-x-0 top-full z-40 mt-2">
+        <div className="pointer-events-none absolute inset-x-0 top-full z-50 mt-2">
           <div className="pointer-events-auto">
             <InlineCommentBar />
           </div>
@@ -164,7 +164,7 @@ export function PreviewChrome({
           </div>
         </div>
 
-        <div className="relative min-h-0 flex-1">{children}</div>
+        <div className="relative min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
     </PreviewCommentContext.Provider>
   );

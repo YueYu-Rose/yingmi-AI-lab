@@ -47,12 +47,15 @@ import type { ChatMessage, Project } from '@/types';
 import { EditableBlock, PreviewChrome } from '@/components/PreviewEdit';
 import IntentSelector, { type IntentOption } from '@/components/IntentSelector';
 import UserChatBubble from '@/components/UserChatBubble';
+import { upsertPublishedPlazaApp, type PublishedPlazaCategory } from '@/lib/plazaPublishing';
+import { CopiedApplicationPreview } from '@/pages/PlazaPage';
 
 interface DesignPageProps {
   project: Project | null;
   initialPrompt: string | null;
   onCreateProject: (prompt: string) => Project;
   onPromoteToProject: (id: string, prompt: string) => void;
+  onTemplateCopyReady: (id: string) => void;
   onBack: () => void;
 }
 
@@ -1703,8 +1706,15 @@ function ExecutionPlanDock({
   );
 }
 
-export default function DesignPage({ project, initialPrompt, onCreateProject, onPromoteToProject, onBack }: DesignPageProps) {
-  const [requestPrompt, setRequestPrompt] = useState(initialPrompt ?? project?.description ?? '');
+export default function DesignPage({ project, initialPrompt, onCreateProject, onPromoteToProject, onTemplateCopyReady, onBack }: DesignPageProps) {
+  const isTemplateCopy = Boolean(project?.templateSnapshot);
+  const [requestPrompt, setRequestPrompt] = useState(
+    initialPrompt
+      ?? (project?.templateSnapshot
+        ? `请使用「${project.templateSnapshot.title}」模板创建应用，完整复制原应用的全部页面、内容与交互。`
+        : project?.description)
+      ?? ''
+  );
   const [requestPromptAt] = useState(() => project?.createdAt ?? new Date().toISOString());
   const [clarifyingReplyKey, setClarifyingReplyKey] = useState(0);
   // 真实模式下，AI 针对用户需求实时生成的理解文字与方向选项
@@ -1730,10 +1740,15 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
   const [selectorDone, setSelectorDone] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [layoutMode] = useState<'focus' | 'three-column'>('focus');
-  const [isRestoring, setIsRestoring] = useState(Boolean(project && !initialPrompt && project.kind !== 'chat'));
+  const [isRestoring, setIsRestoring] = useState(() => {
+    if (!project || initialPrompt || project.kind === 'chat') return false;
+    if (project.templateSnapshot) return project.templateCopyPending === true;
+    return true;
+  });
   const [showPlanPanel] = useState(true);
   const isComparisonDemo =
-    Boolean(project && !initialPrompt && project.kind !== 'chat') && scenario.key === 'comparison';
+    Boolean(project && !initialPrompt && project.kind !== 'chat' && !project.templateSnapshot)
+    && scenario.key === 'comparison';
   const [initialPlanCommitted, setInitialPlanCommitted] = useState(
     () => Boolean(project && !initialPrompt && project.kind !== 'chat')
   );
@@ -1744,6 +1759,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     project && !initialPrompt && project.kind !== 'chat' ? defaultProjectCapabilities(scenario) : []
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [templateHasModificationRequest, setTemplateHasModificationRequest] = useState(false);
   const [input, setInput] = useState(() => (isComparisonDemo ? COMPARISON_FOLLOWUP_DEMO.prompt : ''));
   const [isRefining, setIsRefining] = useState(false);
   const replyTimerRef = useRef<number | null>(null);
@@ -1804,16 +1820,66 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     }
   };
 
+  const publishToApplicationPlaza = () => {
+    const categoryByScenario: Record<ScenarioConfig['key'], PublishedPlazaCategory> = {
+      comparison: '基金研究',
+      portfolio: '组合诊断',
+      morning: '市场内容',
+      wealth: '财富规划',
+      screener: '基金研究',
+      allocation: '财富规划',
+    };
+    const coverByScenario: Record<ScenarioConfig['key'], string> = {
+      comparison: '/plaza/fund-comparison.png',
+      portfolio: '/plaza/portfolio-health.png',
+      morning: '/plaza/market-brief.png',
+      wealth: '/plaza/family-wealth.png',
+      screener: '/plaza/fund-comparison.png',
+      allocation: '/plaza/family-wealth.png',
+    };
+    const capabilities = defaultProjectCapabilities(scenario);
+    const copiedApplication = project?.templateSnapshot;
+
+    upsertPublishedPlazaApp({
+      id: `published-${project?.id ?? scenario.key}`,
+      title: publishFileName,
+      author: '余悦',
+      category: copiedApplication?.category ?? categoryByScenario[scenario.key],
+      description: copiedApplication?.description ?? project?.description ?? scenario.understanding,
+      cover: copiedApplication ? '' : coverByScenario[scenario.key],
+      likes: 0,
+      views: 0,
+      tools: copiedApplication?.tools ?? {
+          MCP: capabilities.filter((item) => item.type === 'MCP').map((item) => item.name),
+          Skills: capabilities.filter((item) => item.type === 'Skill').map((item) => item.name),
+          Agent: capabilities.filter((item) => item.type === 'Agent').map((item) => item.name),
+          组件: capabilities.filter((item) => item.type === 'Component').map((item) => item.name),
+        },
+      supportedDevices: copiedApplication?.supportedDevices ?? ['desktop', 'mobile'],
+      sourceUrl: copiedApplication?.sourceUrl,
+      isTemplate: publishAsTemplate,
+      publishedAt: new Date().toISOString(),
+      shareUrl: publishShareUrl,
+    });
+  };
+
   useEffect(() => {
     if (!isRestoring) return;
-    const restoreTimer = window.setTimeout(() => setIsRestoring(false), 1100);
+    const restoreTimer = window.setTimeout(
+      () => {
+        setIsRestoring(false);
+        if (project?.templateSnapshot && project.id) onTemplateCopyReady(project.id);
+      },
+      project?.templateSnapshot ? 5000 : 1100
+    );
     return () => window.clearTimeout(restoreTimer);
-  }, [isRestoring]);
+  }, [isRestoring, onTemplateCopyReady, project?.id, project?.templateSnapshot]);
 
   // 真实优先：打开已有项目时自动调真实 runtime，拿真实执行链替换写死 steps；失败则保留 demo 数据
   useEffect(() => {
     if (!LIVE) return;
     if (!project) return;
+    if (project.templateSnapshot) return;
     const query = (project.description || requestPrompt || '').trim();
     if (!query) return;
     let cancelled = false;
@@ -2114,6 +2180,17 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
     setPhase('thinking');
   };
 
+  const startTemplateFollowUp = (content: string) => {
+    setTemplateHasModificationRequest(true);
+    followUpPromptRef.current = content;
+    followUpAssistantRef.current = `已完成本轮修改：「${content}」。应用副本已更新，你可以继续预览或提出新的调整。`;
+    setActiveSteps(scenario.steps);
+    pendingCapabilityRecordsRef.current = defaultProjectCapabilities(scenario);
+    pendingCapabilityLogRef.current = true;
+    setCurrentStep(-1);
+    setPhase('thinking');
+  };
+
   const handleIntentSubmit = (value: { optionId: string; title: string; customText?: string; prompt?: string }) => {
     if (value.optionId === 'explore') {
       setSelectorDone(true);
@@ -2195,6 +2272,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       timestamp: new Date().toISOString(),
     }]);
     setInput('');
+    if (project?.templateSnapshot) {
+      startTemplateFollowUp(content);
+      return;
+    }
     if (scenario.key === 'comparison') {
       startComparisonFollowUp(content);
       return;
@@ -2216,6 +2297,10 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       },
     ]);
     setPreviewComment('');
+    if (project?.templateSnapshot) {
+      startTemplateFollowUp(note);
+      return;
+    }
     clearReplyTimer();
     setIsRefining(true);
     replyTimerRef.current = window.setTimeout(() => {
@@ -2281,9 +2366,13 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
       <div data-testid="project-restoring" className="h-screen bg-white flex flex-col items-center justify-center text-center">
         <Loader2 className="w-8 h-8 text-bolt-blue animate-spin mb-6" />
         <p className="text-[22px] tracking-wide text-bolt-light-12">
-          正在打开项目
+          {project?.templateSnapshot ? '正在复制完整应用' : '正在打开项目'}
         </p>
-        <p className="mt-3 text-[13px] text-bolt-light-7">正在加载对话、执行计划与预览</p>
+        <p className="mt-3 text-[13px] text-bolt-light-7">
+          {project?.templateSnapshot
+            ? '页面、内容与交互正在同步，预计约3分钟完成，请稍候…'
+            : '正在加载对话、执行计划与预览'}
+        </p>
       </div>
     );
   }
@@ -2431,7 +2520,13 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
             </div>
           )}
 
-          {initialPlanCommitted ? (
+          {isTemplateCopy && initialPlanCommitted ? (
+            <div data-testid="template-copy-response" className="flex justify-start animate-slide-up">
+              <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-bolt-light-5 bg-white px-3.5 py-2.5 text-[12.5px] leading-relaxed text-bolt-light-11">
+                已生成应用「{project?.name}」。原应用的全部页面、内容与交互已复制完成，你可以直接预览，或继续告诉我想修改的地方。
+              </div>
+            </div>
+          ) : initialPlanCommitted ? (
             <>
               <PlanCard
                 phase="ready"
@@ -2541,7 +2636,9 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
           <div ref={messagesEndRef} />
         </div>
 
-        {layoutMode === 'focus' && (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready') && (
+        {layoutMode === 'focus'
+          && (phase === 'thinking' || phase === 'planning' || phase === 'building' || phase === 'ready')
+          && (!isTemplateCopy || templateHasModificationRequest) && (
           <ExecutionPlanDock phase={phase} currentStep={currentStep} title={scenario.title} planSteps={scenario.planSteps} />
         )}
 
@@ -2761,12 +2858,16 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                   onSubmitComment={submitPreviewComment}
                   isSubmitting={isRefining}
                 >
-                  <ProjectPreview
-                    scenario={scenario}
-                    editMode={previewEditMode}
-                    selectedId={selectedPreviewBlock}
-                    onSelect={(id) => setSelectedPreviewBlock(id || null)}
-                  />
+                  {project?.templateSnapshot ? (
+                    <CopiedApplicationPreview template={project.templateSnapshot} />
+                  ) : (
+                    <ProjectPreview
+                      scenario={scenario}
+                      editMode={previewEditMode}
+                      selectedId={selectedPreviewBlock}
+                      onSelect={(id) => setSelectedPreviewBlock(id || null)}
+                    />
+                  )}
                 </PreviewChrome>
               )}
             </div>
@@ -2889,6 +2990,7 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
                 <button
                   type="button"
                   onClick={() => {
+                    publishToApplicationPlaza();
                     setPublished(true);
                     setPublishOpen(false);
                     setPublishSuccessOpen(true);
