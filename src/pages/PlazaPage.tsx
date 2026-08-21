@@ -240,9 +240,11 @@ export default function PlazaPage({ onUseTemplate, onDetailChange }: PlazaPagePr
   useEffect(() => {
     const syncPublished = () => setTemplates(loadTemplates());
     window.addEventListener('yingmi-plaza-published', syncPublished);
+    window.addEventListener('yingmi-plaza-unpublished', syncPublished);
     window.addEventListener('storage', syncPublished);
     return () => {
       window.removeEventListener('yingmi-plaza-published', syncPublished);
+      window.removeEventListener('yingmi-plaza-unpublished', syncPublished);
       window.removeEventListener('storage', syncPublished);
     };
   }, []);

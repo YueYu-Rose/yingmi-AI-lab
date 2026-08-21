@@ -61,6 +61,67 @@ const CUSTOM_MCP_CONFIG_EXAMPLE = `{
   }
 }`;
 
+// 展示给用户的脱敏示例：只保留接入结构，不包含任何真实密钥。
+const CUSTOM_MCP_PRESETS = [
+  {
+    label: '行情数据示例',
+    value: `{
+  "mcpServers": {
+    "market-data-mcp": {
+      "type": "streamablehttp",
+      "url": "https://api.example.com/mcp/market-data",
+      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
+    }
+  }
+}`,
+  },
+  {
+    label: '基金数据示例',
+    value: `{
+  "mcpServers": {
+    "fund-data-mcp": {
+      "type": "streamablehttp",
+      "url": "https://api.example.com/mcp/fund-data",
+      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
+    }
+  }
+}`,
+  },
+  {
+    label: '本地服务示例',
+    value: `{
+  "mcpServers": {
+    "local-research-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "your-mcp-package"]
+    }
+  }
+}`,
+  },
+] as const;
+
+const DEMO_MCP_TOOLS: Record<string, string[]> = {
+  'market-data-mcp': ['market-data-mcp_realtime_quote', 'market-data-mcp_fund_market_data', 'market-data-mcp_financial_data', 'market-data-mcp_finance_news'],
+  'fund-data-mcp': ['fund-data-mcp_search_funds', 'fund-data-mcp_fund_detail', 'fund-data-mcp_nav_history', 'fund-data-mcp_performance'],
+  'local-research-mcp': ['local-research-mcp_search', 'local-research-mcp_read_file', 'local-research-mcp_build_report'],
+  'mx-ds-mcp': ['mx-ds-mcp_realtime_quote', 'mx-ds-mcp_fund_data', 'mx-ds-mcp_company_profile'],
+  'hexin-ifind-ds-stock-mcp': ['hexin-ifind-ds-stock-mcp_stock_quote', 'hexin-ifind-ds-stock-mcp_stock_finance', 'hexin-ifind-ds-stock-mcp_stock_news'],
+  'hexin-ifind-ds-fund-mcp': ['hexin-ifind-ds-fund-mcp_fund_search', 'hexin-ifind-ds-fund-mcp_fund_detail', 'hexin-ifind-ds-fund-mcp_fund_nav'],
+  'hexin-ifind-ds-edb-mcp': ['hexin-ifind-ds-edb-mcp_indicator_query', 'hexin-ifind-ds-edb-mcp_indicator_history'],
+  'hexin-ifind-ds-news-mcp': ['hexin-ifind-ds-news-mcp_search_news', 'hexin-ifind-ds-news-mcp_news_detail'],
+  'hexin-ifind-ds-bond-mcp': ['hexin-ifind-ds-bond-mcp_bond_basic_info', 'hexin-ifind-ds-bond-mcp_bond_market_data', 'hexin-ifind-ds-bond-mcp_bond_financial_data'],
+  'hexin-ifind-ds-global-stock-mcp': ['hexin-ifind-ds-global-stock-mcp_global_quote', 'hexin-ifind-ds-global-stock-mcp_global_finance'],
+  'hexin-ifind-ds-index-mcp': ['hexin-ifind-ds-index-mcp_index_quote', 'hexin-ifind-ds-index-mcp_index_components'],
+  domainscan: ['domainscan_search', 'domainscan_whois', 'domainscan_dns_records'],
+  xpoz: ['xpoz_search', 'xpoz_extract', 'xpoz_analyze'],
+  dembrandt: ['dembrandt_generate', 'dembrandt_review', 'dembrandt_export'],
+};
+
+function demoToolsFor(name: string) {
+  return DEMO_MCP_TOOLS[name] ?? [`${name}_tool_1`, `${name}_tool_2`];
+}
+
 const CUSTOM_SKILL_INSTALL_EXAMPLE = `请先获取以下工作流或安装文档的完整内容：
 https://example.com/install-skill-workflow.md
 
@@ -71,6 +132,12 @@ https://example.com/install-skill-workflow.md
 - skills：skill-name-1,skill-name-2
 
 如果安装过程中遇到问题，请说明具体原因并给出修复建议，不要跳过或猜测。`;
+
+const CUSTOM_SKILL_PRESETS = [
+  { label: '基金分析示例', name: 'fund-analyst-custom', instruction: CUSTOM_SKILL_INSTALL_EXAMPLE, abilities: ['基金筛选', '业绩归因', '风险比较'] },
+  { label: '市场晨报示例', name: 'market-morning-brief-custom', instruction: '请安装并初始化market-morning-brief Skill。先读取完整安装工作流，再按步骤执行。', abilities: ['市场资讯整理', '晨报生成', '事件摘要'] },
+  { label: '数据可视化示例', name: 'design-data-visualization-custom', instruction: '请安装并初始化design-data-visualization Skill。先读取完整工作流，再执行安装。', abilities: ['图表选择', '数据结构化', '页面可视化'] },
+] as const;
 
 const TABS = [
   { id: 'mcp', label: 'MCP', icon: PlugZap },
@@ -1030,7 +1097,7 @@ function CustomMcpManager({ items, onChange, onClose }: { items: CustomMcp[]; on
   );
 }
 
-function AddCustomSkillModal({ onSave: _onSave, onClose }: { onSave: (item: CustomSkill) => void; onClose: () => void }) {
+function AddCustomSkillModal({ onSave, onClose }: { onSave: (item: CustomSkill) => void; onClose: () => void }) {
   const [instruction, setInstruction] = useState('');
   const [submitted, setSubmitted] = useState(false);
   useEffect(() => {
@@ -1062,6 +1129,13 @@ function AddCustomSkillModal({ onSave: _onSave, onClose }: { onSave: (item: Cust
         <div className="space-y-3 px-7 py-6">
           <label className="block">
             <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">安装指令</span>
+            <div className="mb-2 flex flex-wrap gap-2">
+              {CUSTOM_SKILL_PRESETS.map((preset) => (
+                <button key={preset.name} type="button" onClick={() => { setInstruction(preset.instruction); setSubmitted(false); }} className="rounded-full border border-bolt-light-5 bg-white px-3 py-1 text-[11px] text-bolt-light-8 transition hover:border-bolt-blue hover:text-bolt-blue">
+                  填入{preset.label}
+                </button>
+              ))}
+            </div>
             <textarea
               autoFocus
               value={instruction}
@@ -1085,7 +1159,17 @@ function AddCustomSkillModal({ onSave: _onSave, onClose }: { onSave: (item: Cust
           <button
             type="button"
             disabled={!instruction.trim()}
-            onClick={() => setSubmitted(true)}
+            onClick={() => {
+              const preset = CUSTOM_SKILL_PRESETS.find((item) => instruction === item.instruction);
+              onSave({
+                id: `custom-skill-${Date.now()}`,
+                name: preset?.name ?? 'custom-skill',
+                source: '用户配置 · 演示Skill',
+                abilities: preset ? [...preset.abilities] : ['等待AI读取安装指令'],
+                enabled: false,
+              });
+              setSubmitted(true);
+            }}
             className="h-10 rounded-lg bg-bolt-blue px-4 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             交给AI安装
@@ -1109,7 +1193,7 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
   }, [onClose]);
 
   const saveDraft = () => {
-    let parsed: { mcpServers?: Record<string, { url?: string; headers?: Record<string, string> }> };
+    let parsed: { mcpServers?: Record<string, { type?: string; url?: string; headers?: Record<string, string>; command?: string; args?: string[] }> };
     try {
       parsed = JSON.parse(rawConfig);
     } catch {
@@ -1122,22 +1206,27 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
       return;
     }
     const [name, config] = entry;
-    if (!config.url) {
-      setValidationError('配置中缺少MCP服务地址url。');
+    if (!config.url && !config.command) {
+      setValidationError('配置中需要包含url（远程服务）或command（本地服务）。');
       return;
     }
+    const transport = config.command ? 'stdio' : 'http';
+    const endpoint = config.url ?? `${config.command} ${(config.args ?? []).join(' ')}`;
     onSave({
       id: `custom-${Date.now()}`,
       name,
-      description: `HTTP连接：${config.url}`,
-      tools: ['等待首次同步工具清单'],
+      description: `${transport === 'stdio' ? '本地进程' : '远程连接'}：${endpoint}`,
+      // 仅用于演示展开态；真实接入后应由 MCP 服务返回并替换。
+      tools: demoToolsFor(name),
       enabled: false,
       icon: Database,
       accent: 'bg-slate-100 text-slate-600',
       connection: {
-        transport: 'http',
+        transport,
         url: config.url,
         headers: JSON.stringify(config.headers),
+        command: config.command,
+        args: config.args?.join(' '),
         rawConfig,
       },
     });
@@ -1166,6 +1255,18 @@ function AddCustomMcpModal({ onSave, onClose }: { onSave: (item: CustomMcp) => v
         <div className="max-h-[60vh] space-y-4 overflow-y-auto px-7 py-6">
           <label className="block">
             <span className="mb-2 block text-[13px] font-medium text-bolt-light-10">MCP配置</span>
+            <div className="mb-2 flex flex-wrap gap-2">
+              {CUSTOM_MCP_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => { setRawConfig(preset.value); setValidationError(''); }}
+                  className="rounded-full border border-bolt-light-5 bg-white px-3 py-1 text-[11px] text-bolt-light-8 transition hover:border-bolt-blue hover:text-bolt-blue"
+                >
+                  填入{preset.label}
+                </button>
+              ))}
+            </div>
             <textarea
               autoFocus
               value={rawConfig}

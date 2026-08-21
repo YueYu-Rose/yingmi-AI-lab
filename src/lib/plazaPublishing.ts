@@ -24,7 +24,7 @@ export interface PublishedPlazaApp {
 }
 
 export const PLAZA_PUBLISHED_KEY = 'yingmi-plaza-published-v1';
-const REMOVE_TWO_YUYUE_PUBLICATIONS_KEY = 'yingmi-plaza-remove-two-yuyue-v1';
+const REMOVE_TWO_YUYUE_PUBLICATIONS_KEY = 'yingmi-plaza-remove-legacy-personal-publications-v3';
 
 function isRemovedDemoPublication(item: PublishedPlazaApp) {
   const removedDemoTitles = [
@@ -44,11 +44,10 @@ export function loadPublishedPlazaApps(): PublishedPlazaApp[] {
     const value = JSON.parse(window.localStorage.getItem(PLAZA_PUBLISHED_KEY) ?? '[]');
     if (!Array.isArray(value)) return [];
     const shouldRemoveYuyuePublications = window.localStorage.getItem(REMOVE_TWO_YUYUE_PUBLICATIONS_KEY) !== 'done';
-    let removedYuyueCount = 0;
     const filtered = (value as PublishedPlazaApp[]).filter((item) => {
       if (isRemovedDemoPublication(item)) return false;
-      if (shouldRemoveYuyuePublications && item.author === '余悦' && removedYuyueCount < 2) {
-        removedYuyueCount += 1;
+      // 清理此前演示阶段遗留的个人发布记录；后续新发布记录不会受影响。
+      if (shouldRemoveYuyuePublications && (item.author === '余悦' || item.author === '张伟')) {
         return false;
       }
       return true;
@@ -70,4 +69,11 @@ export function upsertPublishedPlazaApp(app: PublishedPlazaApp) {
   const next = [app, ...current.filter((item) => item.id !== app.id)];
   window.localStorage.setItem(PLAZA_PUBLISHED_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent('yingmi-plaza-published', { detail: app }));
+}
+
+export function removePublishedPlazaApp(id: string) {
+  const current = loadPublishedPlazaApps();
+  const next = current.filter((item) => item.id !== id);
+  window.localStorage.setItem(PLAZA_PUBLISHED_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent('yingmi-plaza-unpublished', { detail: { id } }));
 }

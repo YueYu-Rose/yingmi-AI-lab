@@ -47,7 +47,7 @@ import type { ChatMessage, Project } from '@/types';
 import { EditableBlock, PreviewChrome } from '@/components/PreviewEdit';
 import IntentSelector, { type IntentOption } from '@/components/IntentSelector';
 import UserChatBubble from '@/components/UserChatBubble';
-import { upsertPublishedPlazaApp, type PublishedPlazaCategory } from '@/lib/plazaPublishing';
+import { loadPublishedPlazaApps, upsertPublishedPlazaApp, type PublishedPlazaCategory } from '@/lib/plazaPublishing';
 import { CopiedApplicationPreview } from '@/pages/PlazaPage';
 
 interface DesignPageProps {
@@ -1275,6 +1275,46 @@ function buildCodeTree(files: CodeFile[]): CodeTreeNode[] {
   return root;
 }
 
+function crc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZipBlob(files: CodeFile[]) {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  const u16 = (value: number) => new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
+  const u32 = (value: number) => new Uint8Array([value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]);
+  const concat = (parts: Uint8Array[]) => {
+    const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let cursor = 0;
+    parts.forEach((part) => { result.set(part, cursor); cursor += part.length; });
+    return result;
+  };
+
+  files.forEach((file) => {
+    const name = encoder.encode(file.path);
+    const data = encoder.encode(file.content);
+    const checksum = crc32(data);
+    const local = concat([u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(checksum), u32(data.length), u32(data.length), u16(name.length), u16(0), name, data]);
+    chunks.push(local);
+    const entry = concat([u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(checksum), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name]);
+    central.push(entry);
+    offset += local.length;
+  });
+
+  const centralDirectory = concat(central);
+  const body = concat(chunks);
+  const end = concat([u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(centralDirectory.length), u32(body.length), u16(0)]);
+  return new Blob([body, centralDirectory, end], { type: 'application/zip' });
+}
+
 function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
   const files = buildProjectFiles(scenario);
   const [query, setQuery] = useState('');
@@ -1322,6 +1362,18 @@ function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
     anchor.download = activeFile.path.split('/').pop() ?? 'file.txt';
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadAllCode = () => {
+    const blob = createZipBlob(files);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${scenario.title.replace(/[^\u4e00-\u9fff\w-]+/g, '-').slice(0, 48) || 'yingmi-project'}-code.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const langBadge = (language: CodeFile['language']) => {
@@ -1377,7 +1429,19 @@ function CodeWorkspace({ scenario }: { scenario: ScenarioConfig }) {
     <div data-testid="code-workspace" className="flex h-full w-full overflow-hidden rounded-lg border border-bolt-light-5 bg-white shadow-md">
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-bolt-light-5 bg-bolt-light-2">
         <div className="border-b border-bolt-light-5 px-3 py-3">
-          <p className="mb-2 text-[13px] font-semibold text-bolt-light-12">代码</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[13px] font-semibold text-bolt-light-12">代码</p>
+            <button
+              type="button"
+              onClick={downloadAllCode}
+              title="下载全部代码"
+              aria-label="下载全部代码"
+              className="group relative rounded-md p-1.5 text-bolt-light-7 transition hover:bg-bolt-light-3 hover:text-bolt-blue"
+            >
+              <Download className="h-4 w-4" />
+              <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-md bg-bolt-light-12 px-2 py-1 text-[11px] font-normal text-white shadow-lg group-hover:block">下载全部代码</span>
+            </button>
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-bolt-light-7" />
             <input
@@ -1804,6 +1868,13 @@ export default function DesignPage({ project, initialPrompt, onCreateProject, on
 
   const publishShareUrl = `https://microapp.qieman.com/ai-lab/index.html#/share/${scenario.key}-${(project?.id ?? 'demo').slice(0, 8)}`;
   const publishFileName = project?.name || scenario.title;
+  const publishedAppId = `published-${project?.id ?? scenario.key}`;
+
+  useEffect(() => {
+    const existing = loadPublishedPlazaApps().some((item) => item.id === publishedAppId);
+    setPublished(existing);
+    setPublishToPlaza(existing);
+  }, [publishedAppId]);
 
   useEffect(() => {
     if (!copyToastOpen) return;

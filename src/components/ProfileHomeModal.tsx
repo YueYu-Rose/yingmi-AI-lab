@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Eye, Heart, Pencil, X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
+import { loadPublishedPlazaApps, removePublishedPlazaApp, type PublishedPlazaApp } from '@/lib/plazaPublishing';
 
 interface ProfileHomeModalProps {
   open: boolean;
@@ -19,6 +20,20 @@ export default function ProfileHomeModal({
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>('上架作品');
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(displayName);
+  const [publishedApps, setPublishedApps] = useState<PublishedPlazaApp[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setPublishedApps(loadPublishedPlazaApps());
+    refresh();
+    window.addEventListener('yingmi-plaza-published', refresh);
+    window.addEventListener('yingmi-plaza-unpublished', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('yingmi-plaza-published', refresh);
+      window.removeEventListener('yingmi-plaza-unpublished', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -142,41 +157,38 @@ export default function ProfileHomeModal({
 
           <div className="mt-4 min-h-[220px]">
             {activeTab === '上架作品' ? (
-              <article className="overflow-hidden">
-                <div className="rounded-xl border border-bolt-light-5 bg-gradient-to-br from-[#eef3fb] to-[#f7f9fc] p-4">
-                  <div className="rounded-lg bg-white p-3 shadow-sm">
-                    <h3 className="text-[13px] font-semibold text-bolt-light-12">股票信息搜索</h3>
-                    <div className="mt-2 rounded-md border border-bolt-light-5 bg-bolt-light-2 px-2.5 py-1.5 text-[11px] text-bolt-light-7">
-                      搜索股票名称或代码…
-                    </div>
-                    <p className="mt-2 text-[10.5px] leading-relaxed text-bolt-light-8">
-                      输入股票名称、拼音首字母或股票代码，即可快速匹配并自动填充
-                    </p>
-                  </div>
+              publishedApps.filter((app) => app.author === displayName).length > 0 ? (
+                <div className="space-y-4">
+                  {publishedApps.filter((app) => app.author === displayName).map((app) => (
+                    <article key={app.id} className="overflow-hidden">
+                      <div className="rounded-xl border border-bolt-light-5 bg-gradient-to-br from-[#eef3fb] to-[#f7f9fc] p-3">
+                        <div className="h-28 overflow-hidden rounded-lg bg-bolt-light-3">
+                          {app.cover ? <img src={app.cover} alt="" className="h-full w-full object-cover" /> : null}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="truncate text-[13.5px] font-semibold text-bolt-light-12">{app.title}</h4>
+                          <div className="mt-1 text-[11px] text-bolt-light-7">已上架到应用广场</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`确定将「${app.title}」下线吗？下线后不会删除工作空间中的原项目。`)) {
+                              removePublishedPlazaApp(app.id);
+                            }
+                          }}
+                          className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-bolt-red hover:bg-red-50"
+                        >
+                          下线应用
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
-                <div className="mt-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-[13.5px] font-semibold text-bolt-light-12">
-                        股票搜索工具，支持加入自选
-                      </h4>
-                      <span className="rounded-md bg-[#a78bfa] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        模板
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3 text-[12px] text-bolt-light-8">
-                    <span className="inline-flex items-center gap-1">
-                      <Eye className="h-3.5 w-3.5" />
-                      18
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-bolt-red">
-                      <Heart className="h-3.5 w-3.5 fill-current" />
-                      3
-                    </span>
-                  </div>
-                </div>
-              </article>
+              ) : (
+                <div className="flex h-[200px] items-center justify-center text-[13px] text-bolt-light-7">暂无上架作品</div>
+              )
             ) : (
               <div className="flex h-[200px] items-center justify-center text-[13px] text-bolt-light-7">
                 暂无内容
